@@ -1,0 +1,11 @@
+# Sobreposição para produção (ubuntu-server atrás do Cloudflare Tunnel).
+# Uso: docker compose -p lcr -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+services:
+  app:
+    image: lcr-app:latest
+    environment:
+      # O túnel entrega HTTPS ao navegador: o cookie de sessão pode ser Secure.
+      COOKIE_SECURE: "true"
+    ports: !override
+      # Só no loopback: quem expõe para fora é o cloudflared (lcr.d4ffy.com -> localhost:8482).
+      - "127.0.0.1:8482:8080"
