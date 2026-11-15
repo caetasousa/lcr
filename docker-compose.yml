@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: acme
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lcr-local-dev-pg-2026}
+      POSTGRES_DB: acme
+    volumes:
+      # No Postgres 18 o volume é montado em /var/lib/postgresql (não mais em /data).
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acme -d acme"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://acme:${POSTGRES_PASSWORD:-lcr-local-dev-pg-2026}@db:5432/acme?sslmode=disable
+      # Protege as chaves privadas da AC no banco (padrão = credencial local do .env.example).
+      AC_SENHA: ${AC_SENHA:-lcr-local-dev-ac-2026}
+      # URL que aparece no carimbo ("Verifique em ...") e nos certificados (LCR).
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TZ_ASSINATURA: America/Sao_Paulo
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
