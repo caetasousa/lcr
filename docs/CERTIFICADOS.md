@@ -4,21 +4,45 @@ Este documento explica, passo a passo, toda a criptografia do LCR Assina: da cri
 
 📑 **Sumário**
 
-1. [🏛️ A hierarquia da AC ACME](#1-️-a-hierarquia-da-ac-acme)
-2. [🌱 Primeira execução: nascimento da AC](#2--primeira-execução-nascimento-da-ac)
-3. [🪪 Emissão do certificado do usuário](#3--emissão-do-certificado-do-usuário)
-4. [🗝️ O cofre: onde fica a chave privada](#4-️-o-cofre-onde-fica-a-chave-privada)
-5. [🔑 Senhas e sessões](#5--senhas-e-sessões)
-6. [🖋️ Assinatura do PDF (PAdES)](#6-️-assinatura-do-pdf-pades)
-7. [🔍 Validação do PDF](#7--validação-do-pdf)
-8. [🚫 Revogação e LCR](#8--revogação-e-lcr)
-9. [🔄 Renovação](#9--renovação)
-10. [💾 Exportação `.pfx`](#10--exportação-pfx)
-11. [📋 Resumo dos algoritmos](#11--resumo-dos-algoritmos)
+0. [📖 Conceitos básicos (comece por aqui)](#conceitos)
+1. [🏛️ A hierarquia da AC ACME](#hierarquia)
+2. [🌱 Primeira execução: nascimento da AC](#nascimento)
+3. [🪪 Emissão do certificado do usuário](#emissao)
+4. [🗝️ O cofre: onde fica a chave privada](#cofre)
+5. [🔑 Senhas e sessões](#senhas)
+6. [🖋️ Assinatura do PDF (PAdES)](#assinatura)
+7. [🔍 Validação do PDF](#validacao)
+8. [🚫 Revogação e LCR](#revogacao)
+9. [🔄 Renovação](#renovacao)
+10. [💾 Exportação `.pfx`](#pfx)
+11. [📋 Resumo dos algoritmos](#resumo)
+
+> 💡 Cada seção começa com um quadro **🗣️ Em palavras simples**. Se você só quer entender a ideia, leia esses quadros. O restante é o detalhe técnico, para o relatório e para quem vai mexer no código.
 
 ---
 
+<a id="conceitos"></a>
+## 0. 📖 Conceitos básicos
+
+Seis ideias bastam para entender todo o resto:
+
+| Conceito | O que é | Analogia |
+|---|---|---|
+| 🧮 **Hash (SHA-256)** | Uma "impressão digital" de qualquer arquivo: um número de 256 bits. Se **um único byte** do arquivo mudar, o hash muda completamente. Não dá para voltar do hash ao arquivo. | A impressão digital de uma pessoa: pequena, única e não permite reconstruir a pessoa. |
+| 🔑 **Par de chaves (RSA)** | Duas chaves ligadas matematicamente. A **privada** fica em segredo e serve para **assinar**. A **pública** pode ser distribuída e serve para **conferir** a assinatura. | Um carimbo que só você tem (privada) e um modelo público do carimbo que qualquer um usa para comparar (pública). |
+| ✍️ **Assinatura digital** | O hash do documento "cifrado" com a chave privada. Quem tem a chave pública confere que (1) o documento não mudou e (2) foi o dono da chave privada quem assinou. | Uma firma reconhecida em cartório, só que matemática. |
+| 🪪 **Certificado (X.509)** | Um documento que diz "**esta chave pública pertence a MARIA SILVA, CPF ...**", assinado por uma AC. | Um RG: liga um rosto (a chave) a um nome. |
+| 🏛️ **Autoridade Certificadora (AC)** | Quem emite e assina os certificados. Se você confia na AC, confia nos certificados que ela emitiu. | O órgão que emite o RG. |
+| 🚫 **LCR (Lista de Certificados Revogados)** | Lista, assinada pela AC, dos certificados cancelados antes do prazo. | A lista de cartões de crédito bloqueados. |
+
+🔁 **O ciclo completo, em uma frase:** a AC te dá um certificado → você assina o hash do PDF com a sua chave privada → qualquer pessoa confere com a chave pública que está no certificado, verifica que o certificado veio da AC e consulta a LCR.
+
+---
+
+<a id="hierarquia"></a>
 ## 1. 🏛️ A hierarquia da AC ACME
+
+> 🗣️ **Em palavras simples:** A AC tem dois níveis: uma **raiz**, que é o ponto máximo de confiança e quase nunca é usada, e uma **intermediária**, que faz o trabalho do dia a dia (emitir certificados). É como a sede de um órgão que credencia uma agência local para emitir os documentos.
 
 📄 Código: [`backend/internal/adapter/secondary/acx509/ac.go`](../backend/internal/adapter/secondary/acx509/ac.go)
 
@@ -49,7 +73,10 @@ graph TD
 
 ---
 
+<a id="nascimento"></a>
 ## 2. 🌱 Primeira execução: nascimento da AC
+
+> 🗣️ **Em palavras simples:** Na primeira vez que o servidor liga, ele "funda" a AC: cria as chaves da raiz e da intermediária, emite os certificados das duas e guarda as chaves no banco **trancadas com a `AC_SENHA`**. Depois disso, a chave da raiz nunca mais é aberta.
 
 📄 Função `criar()` em `acx509/ac.go`
 
@@ -78,7 +105,10 @@ Nas execuções seguintes (`Carregar()`), o servidor lê os dois certificados e 
 
 ---
 
+<a id="emissao"></a>
 ## 3. 🪪 Emissão do certificado do usuário
+
+> 🗣️ **Em palavras simples:** Ao criar a conta, o servidor gera um par de chaves só seu, e a AC intermediária emite um certificado dizendo "esta chave é de NOME, CPF ...". A chave privada é imediatamente **trancada com a sua senha** antes de ir para o banco.
 
 📄 `AC.Emitir()` em `acx509/ac.go` e `service/conta.go`
 
@@ -121,7 +151,10 @@ sequenceDiagram
 
 ---
 
+<a id="cofre"></a>
 ## 4. 🗝️ O cofre: onde fica a chave privada
+
+> 🗣️ **Em palavras simples:** A sua chave privada fica no servidor, mas dentro de um "cofre" que só abre com a sua senha. A senha nunca é guardada: ela é transformada na chave do cofre. Senha errada → o cofre não abre. Nem quem administra o banco consegue usar a sua chave.
 
 📄 Código: [`backend/internal/adapter/secondary/cripto/cripto.go`](../backend/internal/adapter/secondary/cripto/cripto.go)
 
@@ -161,7 +194,10 @@ O servidor deriva de novo a chave a partir da senha e do salt gravado e tenta ab
 
 ---
 
+<a id="senhas"></a>
 ## 5. 🔑 Senhas e sessões
+
+> 🗣️ **Em palavras simples:** A senha de login não é guardada, só um "resumo" lento de calcular (Argon2id), para dificultar quem tentar adivinhar. Depois do login você recebe um bilhete aleatório (cookie) que vale 8 horas, e o banco só guarda o hash desse bilhete.
 
 | O quê | Como |
 |---|---|
@@ -173,7 +209,10 @@ O servidor deriva de novo a chave a partir da senha e do salt gravado e tenta ab
 
 ---
 
+<a id="assinatura"></a>
 ## 6. 🖋️ Assinatura do PDF (PAdES)
+
+> 🗣️ **Em palavras simples:** Assinar = calcular a impressão digital (SHA-256) do PDF e "lacrá-la" com a sua chave privada. Esse lacre, junto com o seu certificado e o da AC, é **gravado dentro do próprio PDF**. O carimbo visível é só enfeite: quem vale é o lacre.
 
 📄 Código: [`backend/internal/adapter/secondary/pades/pades.go`](../backend/internal/adapter/secondary/pades/pades.go) e [`service/assinatura.go`](../backend/internal/service/assinatura.go)
 
@@ -230,37 +269,99 @@ O quadro visível é desenhado como um **Form XObject em PDF puro** (Helvetica, 
 
 ---
 
+<a id="validacao"></a>
 ## 7. 🔍 Validação do PDF
 
-📄 `pades.Validador` e [`service/validacao.go`](../backend/internal/service/validacao.go), regra em [`domain/validacao.go`](../backend/internal/domain/validacao.go)
+> 🗣️ **Em palavras simples:** validar é abrir o "lacre" gravado no PDF e responder a **5 perguntas**. Se as 5 respostas forem "sim", a assinatura é válida.
 
-Qualquer pessoa, sem login, envia um PDF para `POST /api/validar`. Para **cada assinatura** encontrada:
+Qualquer pessoa, **sem login**, envia um PDF em **Validar** (ou `POST /api/validar`). Para **cada assinatura** encontrada no arquivo, o servidor faz estas perguntas:
 
-| # | Verificação | Como é feita | Falha típica |
-|---|---|---|---|
-| 1️⃣ | 🧮 **Integridade** | recalcula o SHA-256 das faixas do `/ByteRange` e compara com o `messageDigest` assinado | ❌ *Message digest mismatch*: alguém mudou um byte |
-| 2️⃣ | ✍️ **Autenticidade** | confere a assinatura RSA com a chave pública do certificado | ❌ assinatura forjada |
-| 3️⃣ | 🔗 **Cadeia** | monta usuário → intermediária → raiz, confiando **apenas** na AC ACME Raiz G2 | ❌ certificado de outra AC |
-| 4️⃣ | 🏷️ **Uso de chave** | exige `Digital Signature` + `Non Repudiation` | ❌ certificado sem permissão para assinar |
-| 5️⃣ | 🚫 **Revogação** | gera a LCR atual, **confere a assinatura da LCR** com a intermediária e procura o serial | ⚠️/❌ ver abaixo |
+### 1️⃣ 🧮 Integridade: o documento mudou depois de assinado?
 
-### ⏰ Revogado antes ou depois?
+O validador **calcula de novo** o SHA-256 do PDF e compara com o hash que foi assinado.
+
+* ✅ Iguais: ninguém mexeu no documento.
+* ❌ Diferentes: alguém alterou algo, nem que seja uma vírgula. Aparece *Documento alterado após a assinatura* (`Message digest mismatch`).
+
+> 🔧 Detalhe: o hash cobre o arquivo inteiro **menos** o espaço onde a própria assinatura fica guardada (o `/Contents`). Ela não pode entrar no cálculo porque ainda não existia quando o hash foi feito. As faixas cobertas ficam anotadas no `/ByteRange`.
+
+### 2️⃣ ✍️ Autenticidade: foi mesmo o dono do certificado que assinou?
+
+A assinatura foi feita com a **chave privada**, que só o dono tem. O validador confere com a **chave pública** que vem no certificado. Se bate, só quem tem aquela chave privada poderia ter assinado.
+
+> 🔒 Analogia: um cadeado que só você consegue fechar, mas que qualquer pessoa consegue ver que foi você quem fechou.
+
+### 3️⃣ 🔗 Cadeia: o certificado é confiável?
+
+Qualquer pessoa consegue criar um certificado dizendo "eu sou a Maria". Por isso o validador sobe a "árvore genealógica" do certificado:
+
+```
+👤 certificado da Maria ──assinado por──► 🏢 AC Intermediária ──assinada por──► 🏛️ AC Raiz ✅
+```
+
+O sistema confia **só** na AC ACME Raiz G2. Certificados de outra AC, ou autoassinados, são recusados (*Cadeia de certificação não confiável*).
+
+> 🪪 Analogia: um RG vale porque foi emitido por um órgão em que você confia, não porque está escrito "RG" nele.
+
+### 4️⃣ 🏷️ Uso de chave: o certificado pode assinar documentos?
+
+Todo certificado diz para que pode ser usado. O validador exige:
+
+* **Digital Signature**: pode assinar;
+* **Non Repudiation**: a assinatura vale como compromisso, e a pessoa não pode negar que assinou.
+
+Um certificado feito para outra finalidade (por exemplo, só para autenticar um site) seria recusado.
+
+### 5️⃣ 🚫 Revogação: o certificado estava ativo na hora da assinatura?
+
+O validador gera a **LCR** atual, **confere se ela foi assinada pela AC** (para ninguém forjar uma lista falsa) e procura nela o número de série do certificado. A resposta depende de **quando** ele foi revogado:
 
 ```mermaid
 graph LR
-    A{"🚫 Certificado<br/>revogado?"} -->|não| V["✅ Válida"]
+    A{"🚫 Certificado<br/>está na LCR?"} -->|não| V["✅ Válida"]
     A -->|sim| B{"Revogado ANTES<br/>da data da assinatura?"}
     B -->|sim| X["❌ Inválida"]
     B -->|não| W["✅ Válida com ⚠️ aviso<br/>(revogação posterior)"]
 ```
 
-Uma revogação **posterior** não invalida o que já foi assinado: na hora em que a pessoa assinou, o certificado era bom. O documento como um todo só é válido se tiver **pelo menos uma assinatura** e **todas** forem válidas.
+* **Revogado depois** de assinar: ✅ continua válido, com aviso. No momento da assinatura o certificado estava bom.
+* **Revogado antes** de assinar: ❌ inválido. Assinaram com um certificado já cancelado.
 
-> ⚠️ Sem carimbo de tempo de uma ACT, a "data da assinatura" é a declarada pelo servidor. Com uma ACT (RFC 3161) ela seria garantida por terceiros.
+> ⚠️ Sem carimbo de tempo de uma ACT (RFC 3161), a "data da assinatura" é a declarada pelo servidor. Com uma ACT ela seria garantida por terceiros.
+
+### 🧾 Resumo
+
+| # | Pergunta | Se falhar, significa que... | Mensagem no app |
+|:---:|---|---|---|
+| 1️⃣ | 🧮 O conteúdo é o mesmo? | o documento foi alterado | *Documento alterado após a assinatura* |
+| 2️⃣ | ✍️ A assinatura bate com o certificado? | a assinatura é falsa | *Reprovada* |
+| 3️⃣ | 🔗 O certificado vem da AC ACME? | o "RG" não é de um emissor confiável | *Cadeia de certificação não confiável* |
+| 4️⃣ | 🏷️ O certificado pode assinar documentos? | é o tipo errado de certificado | *Reprovada* |
+| 5️⃣ | 🚫 Estava ativo na hora de assinar? | foi cancelado antes de assinar | *Certificado já estava revogado ao assinar* |
+
+O **documento** é válido quando tem pelo menos uma assinatura e **todas** passam nas 5 perguntas.
+
+<details>
+<summary>🔧 Detalhes técnicos (onde fica no código)</summary>
+
+| # | Implementação |
+|:---:|---|
+| 1️⃣ | `digitorus/pdfsign/verify` recalcula o SHA-256 das faixas do `/ByteRange` e compara com o atributo `messageDigest` do CMS |
+| 2️⃣ | verifica a assinatura RSA PKCS#1 v1.5 dos atributos assinados com a chave pública do certificado |
+| 3️⃣ | verificação de cadeia com um `CertPool` que contém **apenas** a AC ACME Raiz G2 (`pades.NovoValidador`) |
+| 4️⃣ | `opts.RequireNonRepudiation = true` em `pades.Validador.Validar` |
+| 5️⃣ | `service/validacao.go` gera a LCR, `AC.ConsultarLCR` confere a assinatura dela com a intermediária, e `domain.ResultadoAssinatura.Avaliar` aplica a regra antes/depois |
+
+📄 Arquivos: [`pades/pades.go`](../backend/internal/adapter/secondary/pades/pades.go), [`service/validacao.go`](../backend/internal/service/validacao.go), [`domain/validacao.go`](../backend/internal/domain/validacao.go)
+
+</details>
 
 ---
 
+<a id="revogacao"></a>
 ## 8. 🚫 Revogação e LCR
+
+> 🗣️ **Em palavras simples:** Se a sua chave vazar (ou por outro motivo), você **revoga** o certificado. Ele entra na LCR, a lista pública de certificados cancelados, e não consegue mais assinar. O que você assinou **antes** continua valendo.
 
 📄 `AC.GerarLCR()` e `AC.ConsultarLCR()` em `acx509/ac.go`
 
@@ -295,13 +396,19 @@ Depois de revogado, o certificado **não assina mais nada**.
 
 ---
 
+<a id="renovacao"></a>
 ## 9. 🔄 Renovação
+
+> 🗣️ **Em palavras simples:** Depois de revogado ou vencido, você pode pedir um certificado novo, com um par de chaves novo.
 
 `POST /api/certificado/renovar` só é permitido quando o certificado atual **não está mais válido** (revogado ou expirado). A AC gera um **novo par de chaves** e um **novo certificado** (novo serial), selado de novo com a senha. Os documentos antigos continuam ligados ao certificado antigo.
 
 ---
 
+<a id="pfx"></a>
 ## 10. 💾 Exportação `.pfx`
+
+> 🗣️ **Em palavras simples:** Você pode levar o seu certificado e a chave privada num arquivo `.pfx` (protegido pela sua senha) e instalar no Windows, como um certificado A1 de verdade.
 
 📄 `AC.ExportarPKCS12()`
 
@@ -313,7 +420,10 @@ openssl pkcs12 -in meu_certificado.pfx -info -noout
 
 ---
 
+<a id="resumo"></a>
 ## 11. 📋 Resumo dos algoritmos
+
+> 🗣️ **Em palavras simples:** Tabela de referência com todos os algoritmos e parâmetros usados.
 
 | Finalidade | Algoritmo | Parâmetros | Padrão |
 |---|---|---|---|

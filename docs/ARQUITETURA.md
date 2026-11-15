@@ -1,5 +1,7 @@
 # 🏗️ Arquitetura
 
+> 🗣️ **Em palavras simples:** o sistema é **um programa em Go** que faz duas coisas: entrega as telas do site (feitas em React) e responde às ações (criar conta, assinar, validar). Tudo é guardado num **banco PostgreSQL**. Os dois rodam em containers Docker.
+
 ## 🧭 Visão geral
 
 ```mermaid
@@ -15,6 +17,8 @@ Um único binário Go serve **a API** (`/api/...`) e **os arquivos do frontend**
 ---
 
 ## ⚙️ Backend: hexagonal (portas e adaptadores)
+
+> 🗣️ **Em palavras simples:** as regras do negócio (o que é um CPF válido, quando um certificado pode assinar...) ficam no centro, sem saber nada de banco de dados, web ou bibliotecas de criptografia. Cada tecnologia é uma "peça encaixável" em volta. Assim dá para testar as regras sem banco e trocar uma tecnologia sem mexer nas regras.
 
 Segue a skill `golang-design-patterns` (em `.agents/skills/`). O **domínio** fica no centro e não importa nada de infraestrutura. Os **serviços** falam com o mundo externo só por **interfaces (portas)**, e cada tecnologia fica isolada num **adaptador**.
 

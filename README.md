@@ -35,6 +35,8 @@ docker compose up -d --build
 
 Pronto: abra 👉 **http://localhost:8080**
 
+> 🖱️ **Todo o uso normal é pelo navegador**: criar conta, assinar, validar, revogar, exportar. O terminal **não é necessário**. Ele só aparece na documentação como opção para conferir os resultados com o `openssl` (útil no relatório) ou para quem quiser integrar outro sistema via API.
+
 * 🔑 **Não precisa criar `.env`.** O `docker-compose.yml` já traz como padrão as credenciais de desenvolvimento que estão no [`.env.example`](.env.example). Para mudá-las, copie com `cp .env.example .env` e edite.
 * ⏳ Na primeira execução o servidor cria a AC Raiz (RSA-4096) e a AC Intermediária (RSA-3072). Isso leva alguns segundos.
 * 🧪 CPFs de teste válidos: `529.982.247-25` e `111.444.777-35`.
@@ -99,13 +101,15 @@ Pronto: abra 👉 **http://localhost:8080**
 
 ## 📚 Documentação
 
-| Documento | Conteúdo |
+🧭 **Por onde começar?**
+
+| Eu quero... | Leia |
 |---|---|
-| 🔐 [docs/CERTIFICADOS.md](docs/CERTIFICADOS.md) | **Como funciona o algoritmo**: hierarquia da AC, emissão, cofre de chaves, assinatura PAdES, validação e LCR |
-| 🏗️ [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Arquitetura hexagonal do backend, frontend e banco de dados |
-| 🔌 [docs/API.md](docs/API.md) | Rotas REST |
-| 🎬 [docs/DEMONSTRACAO.md](docs/DEMONSTRACAO.md) | Roteiro de demonstração e comandos `openssl` para o relatório |
-| ☁️ [docs/DEPLOY.md](docs/DEPLOY.md) | Instalação no servidor (Docker rootless + Cloudflare Tunnel) |
+| 🎬 **usar o app** e fazer a demonstração | [docs/DEMONSTRACAO.md](docs/DEMONSTRACAO.md): Parte 1 (navegador) e Parte 2 opcional (terminal) |
+| 🔐 **entender a criptografia** (como o certificado e a assinatura funcionam) | [docs/CERTIFICADOS.md](docs/CERTIFICADOS.md): começa pelos conceitos básicos, com quadros "em palavras simples" |
+| 🏗️ entender **como o código está organizado** | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) |
+| 🔌 chamar a API **de outro programa ou do terminal** | [docs/API.md](docs/API.md) |
+| ☁️ **publicar no servidor** | [docs/DEPLOY.md](docs/DEPLOY.md) |
 
 ---
 

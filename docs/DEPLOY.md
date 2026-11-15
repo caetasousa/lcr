@@ -2,6 +2,8 @@
 
 🌐 **URL:** https://lcr.d4ffy.com
 
+> 🗣️ **Em palavras simples:** o app roda numa máquina de casa (uma distro WSL chamada `ubuntu-server`). Para ficar acessível na internet **sem abrir portas no roteador**, o `cloudflared` abre um túnel de dentro para fora até a Cloudflare, que recebe os acessos em `lcr.d4ffy.com` e os entrega pelo túnel. Para rodar **localmente**, nada disso é necessário: veja o README.
+
 ## 🗺️ Como está montado
 
 ```mermaid

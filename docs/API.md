@@ -1,5 +1,7 @@
 # 🔌 API REST
 
+> 🗣️ **Para que serve isto?** O app no navegador já usa esta API por trás. **Você não precisa dela para usar o sistema.** Ela serve para quem quiser automatizar (um script, outro sistema) ou testar pelo terminal com `curl`.
+
 Base: `http://localhost:8080` (local) ou `https://lcr.d4ffy.com` (produção).
 
 🍪 A autenticação é por **cookie de sessão** (`HttpOnly; SameSite=Strict`), criado no login. Erros voltam como JSON `{"erro": "mensagem"}`.
@@ -33,6 +35,8 @@ Base: `http://localhost:8080` (local) ou `https://lcr.d4ffy.com` (produção).
 📏 PDFs: até **20 MiB**, e o arquivo precisa começar com `%PDF-`.
 
 ## 🧪 Exemplos com `curl`
+
+Fluxo completo pelo terminal, equivalente ao que se faz clicando no app. Os comandos rodam em sequência, na mesma pasta, com um `contrato.pdf` qualquer nela. O arquivo `cookies.txt` guarda a sessão entre um comando e outro.
 
 ```bash
 # 🏛️ baixar a cadeia da AC
