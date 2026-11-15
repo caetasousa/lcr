@@ -26,11 +26,12 @@ type Arrasto = { modo: 'mover'; dx: number; dy: number } | { modo: 'redimensiona
 interface Props {
   arquivo: File
   nome: string
+  cpf?: string
   onPosicao: (p: Posicao | null) => void
   onErro: (msg: string) => void
 }
 
-export default function PosicionadorPdf({ arquivo, nome, onPosicao, onErro }: Props) {
+export default function PosicionadorPdf({ arquivo, nome, cpf, onPosicao, onErro }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [pagina, setPagina] = useState(1)
   const [vp1, setVp1] = useState<PageViewport | null>(null)
@@ -247,14 +248,20 @@ export default function PosicionadorPdf({ arquivo, nome, onPosicao, onErro }: Pr
                 }}
               >
                 <div className="previa">
-                  <div className="barra" />
-                  <div className="faixa" />
-                  <div className="textos">
-                    <span className="r">DOCUMENTO ASSINADO DIGITALMENTE</span>
-                    <b>{nome.toUpperCase()}</b>
-                    <span>Data: no momento da assinatura</span>
-                    <span>Verifique em {location.origin}/validar</span>
+                  <div className="corpo">
+                    <svg className="selo-previa" viewBox="0 0 100 100" aria-hidden="true">
+                      <circle cx="50" cy="50" r="50" fill="#0c0c0c" />
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#c4f042" strokeWidth="6" />
+                      <polyline points="32,51 45,63 69,36" fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="textos">
+                      <span className="r">DOCUMENTO ASSINADO DIGITALMENTE</span>
+                      <b>{nome.toUpperCase()}</b>
+                      {cpf && <span>CPF ***.{cpf.slice(4, 11)}-**</span>}
+                      <span>data e hora da assinatura</span>
+                    </div>
                   </div>
+                  <div className="rodape-previa">Verifique a autenticidade em&nbsp;<b>{location.host}/validar</b></div>
                 </div>
                 <div className="alca" data-alvo="alca" title="Arraste para redimensionar" />
               </div>

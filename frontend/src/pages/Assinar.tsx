@@ -136,7 +136,7 @@ export default function Assinar({ eu, onValidar }: Props) {
           </div>
 
           <Suspense fallback={<div className="carregando"><span className="giro" /> Carregando visualizador…</div>}>
-            <PosicionadorPdf arquivo={arquivo} nome={eu.nome} onPosicao={setPosicao} onErro={onErro} />
+            <PosicionadorPdf arquivo={arquivo} nome={eu.nome} cpf={eu.cpf} onPosicao={setPosicao} onErro={onErro} />
           </Suspense>
           {erro && <p className="erro">{erro}</p>}
 

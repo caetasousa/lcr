@@ -274,17 +274,19 @@ input:hover, select:hover { border-color: var(--borda-forte); }
   position: absolute; cursor: move; user-select: none; overflow: hidden;
   border: 1.5px solid var(--primaria); border-radius: 2px;
   box-shadow: var(--brilho), 0 6px 18px rgb(0 0 0 / 0.25);
-  background: #f9faf3;
+  background: #fff;
   transition: box-shadow var(--medio) var(--curva);
 }
 .caixa-assinatura:hover { box-shadow: 0 0 14px rgb(196 240 66 / 0.8), 0 6px 18px rgb(0 0 0 / 0.25); }
-.previa { display: flex; height: 100%; }
-.previa .barra { width: 7.5%; background: #0c0c0c; flex: none; }
-.previa .faixa { width: 2.6%; background: var(--primaria); flex: none; }
-.previa .textos { display: flex; flex-direction: column; justify-content: center; padding: 0 0.8em; line-height: 1.24; white-space: nowrap; overflow: hidden; color: #0c0c0c; }
-.previa .textos span { font-size: 0.8em; color: #616161; overflow: hidden; text-overflow: ellipsis; }
-.previa .textos span.r { font-weight: 700; font-size: 0.72em; letter-spacing: 0.02em; }
+.previa { display: flex; flex-direction: column; height: 100%; background: #fff; color: #0c0c0c; font-family: Helvetica, Arial, "Liberation Sans", "Nimbus Sans", sans-serif; }
+.previa .corpo { flex: 1; min-height: 0; display: flex; align-items: center; gap: 0.55em; padding: 0 0.55em; border-bottom: 0.14em solid var(--primaria); }
+.previa .selo-previa { height: 74%; width: auto; aspect-ratio: 1; flex: none; }
+.previa .textos { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+.previa .textos span { font-size: 0.8em; overflow: hidden; text-overflow: ellipsis; }
+.previa .textos span.r { font-weight: 700; font-size: 0.62em; letter-spacing: 0.04em; color: #6b6b6b; }
 .previa .textos b { font-size: 1.1em; overflow: hidden; text-overflow: ellipsis; }
+.previa .rodape-previa { flex: none; height: 22%; display: flex; align-items: center; justify-content: center; padding: 0 0.5em; background: #0c0c0c; color: #fff; font-size: 0.62em; white-space: nowrap; overflow: hidden; }
+.previa .rodape-previa b { color: var(--primaria); }
 .alca { position: absolute; right: -1px; bottom: -1px; width: 14px; height: 14px; cursor: nwse-resize; background: var(--primaria); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
 .marcador-alvo { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .marcador-alvo div { display: flex; align-items: center; gap: var(--e1); padding: 6px 12px; border-radius: var(--r-pill); background: rgb(12 12 12 / 0.85); color: var(--primaria); font-size: 12px; font-weight: 500; border: 1px solid rgb(196 240 66 / 0.35); box-shadow: var(--brilho); animation: pulsar 2.4s ease-in-out infinite; }

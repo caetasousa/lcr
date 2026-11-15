@@ -4,6 +4,9 @@ services:
   app:
     image: lcr-app:latest
     environment:
+      # Link oficial: vai no carimbo ("Verifique em lcr.d4ffy.com/validar") e
+      # nas URLs de LCR/AIA dos certificados. Fixo aqui para não depender do .env.
+      PUBLIC_URL: https://lcr.d4ffy.com
       # O túnel entrega HTTPS ao navegador: o cookie de sessão pode ser Secure.
       COOKIE_SECURE: "true"
     ports: !override
