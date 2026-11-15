@@ -68,7 +68,12 @@ else
   echo "==> .env já existe: mantido (AC_SENHA não pode mudar, senão as chaves da AC ficam ilegíveis)"
 fi
 chmod 600 "$DEST/.env"
-chown -R "$APP_USER:$APP_USER" /home/$APP_USER
+# Só a pasta do app e o .bashrc. NUNCA "chown -R /home/lcr": lá dentro fica o
+# armazenamento do Docker rootless (volumes e camadas de imagem), cujos arquivos
+# pertencem a subuids (ex.: postgres = uid 70 no container). Mudar o dono deles
+# deixa o PostgreSQL sem permissão nos próprios arquivos.
+chown -R "$APP_USER:$APP_USER" "$DEST"
+chown "$APP_USER:$APP_USER" /home/$APP_USER/.bashrc
 
 echo "==> Build e subida (pode levar alguns minutos)"
 COMPOSE="docker compose -p lcr -f docker-compose.yml -f deploy/docker-compose.prod.yml"
