@@ -4,8 +4,8 @@ Este roteiro tem **duas partes independentes**:
 
 | Parte | Para quem | Precisa de quê |
 |---|---|---|
-| 🖱️ **[Parte 1: usando o app](#️-parte-1-usando-o-app-no-navegador)** | qualquer pessoa; é a demonstração principal | só o navegador |
-| 💻 **[Parte 2: conferindo pelo terminal](#-parte-2-conferindo-pelo-terminal-opcional)** | quem quer provar no relatório que a criptografia é real | terminal com `curl` e `openssl` |
+| 🖱️ **[Parte 1: usando o app](#parte-1)** | qualquer pessoa; é a demonstração principal | só o navegador |
+| 💻 **[Parte 2: conferindo pelo terminal](#parte-2)** | quem quer provar no relatório que a criptografia é real | terminal com `curl` e `openssl` |
 
 > 💡 **Faça a Parte 1 primeiro.** A Parte 2 é opcional: ela usa os arquivos baixados na Parte 1 para conferir, com ferramentas independentes, que os certificados e assinaturas seguem os padrões.
 
@@ -21,6 +21,7 @@ Tenha à mão **um PDF qualquer** (um contrato, um trabalho, qualquer coisa).
 
 ---
 
+<a id="parte-1"></a>
 ## 🖱️ Parte 1: usando o app no navegador
 
 ### 1️⃣ Criar a conta e receber o certificado
@@ -90,6 +91,8 @@ Aqui você mostra que a assinatura **detecta qualquer alteração**.
 
 ### 8️⃣ Emitir um certificado novo e exportar o `.pfx` 💾
 
+> 📖 O passo a passo detalhado (o que é cada arquivo, instalação no Windows, uso no Adobe Reader e no Word) está no [README, seção Meu certificado](../README.md#meu-certificado).
+
 1. Menu **Certificado** → **Emitir novo certificado** (só aparece depois de revogar ou expirar). Confirme com a senha.
 2. Clique em **Exportar .pfx (A1)** e confirme com a senha.
 3. No Windows, dê dois cliques no `.pfx` para instalar (como no item 4.3 do laboratório). A senha do `.pfx` é a mesma da conta.
@@ -99,6 +102,7 @@ Aqui você mostra que a assinatura **detecta qualquer alteração**.
 
 ---
 
+<a id="parte-2"></a>
 ## 💻 Parte 2: conferindo pelo terminal (opcional)
 
 Aqui você confere, **fora do app**, que tudo segue os padrões. Use o `openssl`, que não tem nada a ver com o projeto. Funciona no Linux, no WSL ou no Git Bash.

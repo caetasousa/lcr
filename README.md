@@ -19,7 +19,116 @@
 | 📂 | **Histórico** de documentos assinados | ✅ |
 | 🚫 | **Revogar** o certificado e ver a LCR mudar | ✅ |
 | 🔄 | **Renovar** (novo par de chaves e novo certificado) | ✅ |
-| 💾 | **Exportar `.pfx`** (A1) para instalar no Windows | ✅ |
+| 💾 | **Exportar `.pfx`** (A1) para instalar no Windows ([o que é cada arquivo](#meu-certificado)) | ✅ |
+
+---
+
+<a id="meu-certificado"></a>
+## 📁 Meu certificado: o que é cada arquivo e para que serve
+
+Na tela **Certificado** aparecem estas opções:
+
+| Opção | Arquivo | Tem a chave privada? | Pode compartilhar? | Serve para... |
+|---|---|:---:|:---:|---|
+| 📄 **Certificado em PEM** | (texto na tela) | ❌ | ✅ | ver ou copiar o certificado como texto |
+| 📥 **Baixar .crt** | `meu_certificado.crt` | ❌ | ✅ | provar **quem você é**; outras pessoas conferem as suas assinaturas |
+| 🔑 **Exportar .pfx (A1)** | `meu_certificado.pfx` | ✅ | 🚫 **nunca** | **assinar** fora do site: Adobe Reader, Word, e-mail |
+| 🚫 **Revogar** | — | — | — | **cancelar** o certificado (por exemplo, se o `.pfx` vazar) |
+
+> 💡 **Regra de ouro:** o `.crt` é como a **cópia do seu RG**: pode mandar para qualquer um. O `.pfx` é como o **seu RG mais a sua caneta**: quem tiver o arquivo e a senha assina **em seu nome**.
+
+### 📄 Certificado em PEM
+
+É o próprio certificado escrito em texto (Base64), entre as linhas `-----BEGIN CERTIFICATE-----` e `-----END CERTIFICATE-----`. O conteúdo é **o mesmo do `.crt`**, só que na tela.
+
+* 📋 **Use para:** copiar e colar num e-mail, num relatório ou num site de inspeção de certificados.
+* 🔍 Dá para inspecionar colando o texto num arquivo e rodando `openssl x509 -in arquivo.pem -noout -text`.
+
+### 📥 Baixar .crt (`meu_certificado.crt`)
+
+Contém **só a parte pública**: o seu nome e CPF, a sua chave pública, a validade e a assinatura da AC ACME. **Não** contém a chave privada, então **não serve para assinar**.
+
+* 👀 **Ver os dados no Windows:** dê dois cliques no arquivo. Abre a janela *Certificado*, com as abas *Geral*, *Detalhes* e *Caminho de Certificação*.
+* 📤 **Mandar para alguém** que queira conferir as suas assinaturas ou te mandar um e-mail cifrado.
+* 🧪 **Conferir a cadeia** pelo terminal (veja a [Parte 2 da demonstração](docs/DEMONSTRACAO.md#parte-2)).
+* ⚠️ **Não precisa instalar** o `.crt` para assinar. Se instalar, ele entra em *Outras Pessoas* e não habilita nada.
+
+### 🔑 Exportar .pfx (A1) (`meu_certificado.pfx`)
+
+É o pacote completo, no formato **PKCS#12**: o seu certificado, **a sua chave privada** e a cadeia da AC (intermediária e raiz), tudo cifrado com a **mesma senha da sua conta** (AES-256 + PBKDF2). É exatamente o que um **certificado A1** da ICP-Brasil entrega.
+
+* 🔒 O site pede a senha de novo para exportar.
+* 🚫 **Não compartilhe e não envie por e-mail.** Guarde num lugar seguro.
+* ⏳ Só aparece enquanto o certificado está **válido** (não revogado e não vencido).
+
+#### 💻 Instalar no Windows
+
+1. Dê dois cliques no `meu_certificado.pfx`. Abre o *Assistente para Importação de Certificados*.
+2. **Local do Repositório:** escolha **Usuário Atual** → *Avançar*.
+3. Confirme o arquivo → *Avançar*.
+4. **Senha:** digite a senha da sua conta no LCR Assina. Marque **"Marcar esta chave como exportável"** só se quiser poder exportá-la de novo depois.
+5. **Repositório:** deixe *Selecionar automaticamente o repositório conforme o tipo de certificado* → *Avançar* → *Concluir*.
+6. 🔎 **Para conferir:** `Win + R` → `certmgr.msc` → *Pessoal* → *Certificados*. Lá está `SEU NOME:CPF`, com o ícone de chave (indica que a chave privada veio junto).
+
+> ⚠️ Para o Windows **confiar** no certificado (e não mostrar "identidade desconhecida"), instale também a **AC Raiz** (veja [Arquivos da AC ACME](#arquivos-ac), logo abaixo).
+
+#### ✍️ O que dá para fazer com ele instalado
+
+| Onde | Como |
+|---|---|
+| 📕 **Adobe Acrobat Reader** | *Todas as ferramentas* → *Usar um certificado* → *Assinar digitalmente* (na interface antiga: *Ferramentas* → *Certificados*) → desenhe o quadro → escolha `SEU NOME:CPF`. Gera uma assinatura PAdES, que o **Validar** deste site também reconhece. |
+| 📘 **Word / Excel** (Windows) | *Arquivo* → *Informações* → *Proteger documento* → *Adicionar uma Assinatura Digital*. |
+| ✉️ **Outlook / Thunderbird** | assinar e-mails (S/MIME). O certificado tem o uso *E-mail Protection*. |
+| 🦊 **Firefox** | não usa o repositório do Windows: importe o `.pfx` em *Configurações* → *Privacidade e Segurança* → *Ver certificados* → *Seus certificados* → *Importar*. |
+| 🐧 **Linux / macOS** | `openssl pkcs12 -in meu_certificado.pfx -info -noout` para inspecionar; no macOS, dois cliques importam no *Acesso às Chaves*. |
+
+#### 🗑️ Remover do Windows
+
+`certmgr.msc` → *Pessoal* → *Certificados* → clique com o botão direito em `SEU NOME:CPF` → *Excluir*.
+
+### 🚫 Revogar
+
+Cancela o certificado **antes do vencimento**. O número de série entra na **LCR** (Lista de Certificados Revogados), que qualquer validador consulta.
+
+* 🔐 Pede a sua senha e um **motivo**:
+
+  | Motivo | Quando usar |
+  |---|---|
+  | 🔓 Chave comprometida | o `.pfx` vazou, foi perdido ou alguém descobriu a senha |
+  | 🔀 Mudança de vínculo com a ACME | você saiu da organização ou mudou de função |
+  | 🔄 Substituído por outro certificado | você vai emitir um novo |
+  | 🛑 Cessação de operação | não vai mais usar |
+  | 🤷 Não especificado | nenhum dos anteriores |
+
+* ⛔ **Não dá para desfazer.**
+* ✍️ **Depois de revogar:**
+  * não é mais possível **assinar** com ele, nem pelo site nem com o `.pfx` instalado (a assinatura sai reprovada na validação);
+  * os PDFs assinados **antes** da revogação **continuam válidos**, com um aviso ⚠️;
+  * o botão **Emitir novo certificado** aparece: ele gera um par de chaves novo e um certificado novo, com outro número de série;
+  * se você instalou o `.pfx` antigo no Windows, **exclua-o** (veja acima) e instale o novo.
+
+<a id="arquivos-ac"></a>
+### 🏛️ Arquivos da AC ACME (menu **AC ACME**)
+
+Esta página é **pública**: qualquer pessoa baixa estes arquivos, sem login.
+
+| Arquivo | O que é | Instalar onde |
+|---|---|---|
+| `ac_acme_raiz_g2.crt` | 🏛️ certificado da **AC Raiz**: a âncora de confiança | ✅ **Autoridades de Certificação Raiz Confiáveis** |
+| `ac_acme_assinatura.crt` | 🏢 certificado da **AC Intermediária**, que emite os usuários | opcional: *Autoridades de Certificação Intermediárias* (o `.pfx` já traz ela) |
+| `ac_acme.crl` | 📜 a **LCR** atual, assinada pela intermediária | não se instala: serve para consultar (`openssl crl -inform DER -in ac_acme.crl -noout -text`) |
+
+#### 💻 Instalar a AC Raiz no Windows
+
+1. Dê dois cliques em `ac_acme_raiz_g2.crt` → **Instalar Certificado...**
+2. **Usuário Atual** → *Avançar*.
+3. Marque **Colocar todos os certificados no repositório a seguir** → *Procurar* → **Autoridades de Certificação Raiz Confiáveis** → *OK* → *Avançar* → *Concluir*.
+4. O Windows mostra um **aviso de segurança** ("Você está prestes a instalar um certificado de uma autoridade de certificação..."). Confirme com **Sim**.
+5. 🔎 Abra de novo o `meu_certificado.crt`: a aba *Caminho de Certificação* agora mostra **AC ACME Raiz G2 → AC ACME Assinatura Digital → SEU NOME:CPF**, com "Este certificado está OK".
+
+> ⚠️ Instalar uma raiz faz o computador confiar em **tudo** o que essa AC assinar. Faça isso só em máquinas de teste ou de estudo. Para remover: `certmgr.msc` → *Autoridades de Certificação Raiz Confiáveis* → *Certificados* → `AC ACME Raiz G2` → *Excluir*.
+
+> 📕 **Adobe Reader:** por padrão ele usa a lista de confiança da própria Adobe, não a do Windows. Para ele aceitar a AC ACME: *Editar* → *Preferências* → *Assinaturas* → *Verificação* → *Mais...* → em *Integração com o Windows*, marque **Validar assinaturas**.
 
 ---
 
