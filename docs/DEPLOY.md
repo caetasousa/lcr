@@ -26,6 +26,7 @@ graph LR
 | 🔒 Porta | publicada só em `127.0.0.1:8482` |
 | 🍪 Cookie | `COOKIE_SECURE=true` (o túnel entrega HTTPS) |
 | 📁 Código | `/home/lcr/app` |
+| 🧱 Memória | teto de 1,5 GiB no app e 768 MiB no banco: se estourar, só o LCR reinicia (veja [CARGA.md](CARGA.md)) |
 | 🔑 Segredos | `/home/lcr/app/.env` (modo 600), gerado com senhas **aleatórias**, diferentes das do `.env.example` |
 
 ## 📦 Arquivos

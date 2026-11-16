@@ -1,8 +1,17 @@
 # Sobreposição para produção (ubuntu-server atrás do Cloudflare Tunnel).
 # Uso: docker compose -p lcr -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
 services:
+  db:
+    # Teto de memória: se estourar, só este container é reiniciado; os outros
+    # apps da VM (studygo, agendago, stacktrack) não são afetados.
+    mem_limit: 768m
+    memswap_limit: 768m
   app:
     image: lcr-app:latest
+    # No teste de carga (60 usuários simultâneos, PDFs de 5 MB) o pico foi
+    # de 782 MiB. O teto protege a VM caso algo escape dos limitadores.
+    mem_limit: 1536m
+    memswap_limit: 1536m
     environment:
       # Link oficial: vai no carimbo ("Verifique em lcr.d4ffy.com/validar") e
       # nas URLs de LCR/AIA dos certificados. Fixo aqui para não depender do .env.

@@ -220,6 +220,7 @@ Pronto: abra 👉 **http://localhost:8080**
 | 🏗️ entender **como o código está organizado** | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) |
 | 🔌 chamar a API **de outro programa ou do terminal** | [docs/API.md](docs/API.md) |
 | ☁️ **publicar no servidor** | [docs/DEPLOY.md](docs/DEPLOY.md) |
+| 🏋️ saber **quantos acessos simultâneos aguenta** | [docs/CARGA.md](docs/CARGA.md): 60 usuários juntos, antes e depois dos limitadores |
 
 ---
 

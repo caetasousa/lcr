@@ -170,5 +170,8 @@ frontend/src/
 | `PUBLIC_URL` | `http://localhost:8080` | 🌐 URL gravada nos certificados e no carimbo |
 | `COOKIE_SECURE` | `false` | 🍪 `true` em produção (HTTPS) |
 | `TZ_ASSINATURA` | `America/Sao_Paulo` | 🕐 fuso da data no carimbo |
+| `LIMITE_ARGON2` | `4` | 🧂 cálculos Argon2id simultâneos (64 MiB cada) |
+| `LIMITE_PDF` | `4` | 📄 requisições com PDF simultâneas (o resto espera; 503 após 30 s) |
+| `GOMEMLIMIT` | `768MiB` | 🧹 alvo de memória do coletor de lixo do Go |
 | `PORT` | `8080` | porta HTTP |
 | `STATIC_DIR` | `/app/web` | pasta do frontend compilado |
