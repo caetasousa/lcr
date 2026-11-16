@@ -32,7 +32,7 @@ func (h *Handler) iniciarSessao(w http.ResponseWriter, r *http.Request, usuarioI
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: cookieSessao, Value: token, Path: "/", Expires: expira,
+		Name: h.nomeCookie(), Value: token, Path: "/", Expires: expira,
 		HttpOnly: true, Secure: h.cfg.cookieSeguro, SameSite: http.SameSiteStrictMode,
 	})
 	return nil
@@ -44,11 +44,26 @@ func (h *Handler) cadastro(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
+	ip := h.ipCliente(r)
+	if h.lim != nil {
+		// Cadastros recusados em série são sondagem (ex.: descobrir quais
+		// CPFs já têm conta).
+		if bloq, espera := h.lim.cadastroErro.bloqueado(ip); bloq {
+			h.auditar(r, "taxa_excedida", "limite", "cadastro_recusado")
+			muitasRequisicoes(w, espera, "Muitas tentativas de cadastro.")
+			return
+		}
+	}
 	u, err := h.s.Conta.Cadastrar(r.Context(), in.Nome, in.CPF, in.Senha)
 	if err != nil {
+		if h.lim != nil {
+			h.lim.cadastroErro.falhou(ip)
+		}
+		h.auditar(r, "cadastro_recusado", "cpf", cpfParaLog(in.CPF), "motivo", err.Error())
 		responderErro(w, r, err)
 		return
 	}
+	h.auditar(r, "cadastro", "usuario_novo", u.ID)
 	if err := h.iniciarSessao(w, r, u.ID); err != nil {
 		responderErro(w, r, err)
 		return
@@ -62,11 +77,29 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
+	// Força bruta contra UMA conta: depois de N senhas erradas o CPF fica
+	// bloqueado por um tempo, venha de onde vier a tentativa.
+	chave := cpfParaLog(in.CPF) + "|" + soDigitos(in.CPF)
+	if h.lim != nil {
+		if bloq, espera := h.lim.loginFalhas.bloqueado(chave); bloq {
+			h.auditar(r, "taxa_excedida", "limite", "login_cpf", "cpf", cpfParaLog(in.CPF))
+			muitasRequisicoes(w, espera, "Muitas tentativas de login nesta conta.")
+			return
+		}
+	}
 	u, err := h.s.Conta.Autenticar(r.Context(), in.CPF, in.Senha)
 	if err != nil {
+		if h.lim != nil {
+			h.lim.loginFalhas.falhou(chave)
+		}
+		h.auditar(r, "login_falhou", "cpf", cpfParaLog(in.CPF))
 		responderErro(w, r, err)
 		return
 	}
+	if h.lim != nil {
+		h.lim.loginFalhas.zera(chave)
+	}
+	h.auditar(r, "login", "usuario_logado", u.ID)
 	if err := h.iniciarSessao(w, r, u.ID); err != nil {
 		responderErro(w, r, err)
 		return
@@ -75,10 +108,15 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(cookieSessao); err == nil {
+	if c, err := r.Cookie(h.nomeCookie()); err == nil {
 		_ = h.s.Conta.EncerrarSessao(r.Context(), c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieSessao, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
+	// Mesmos atributos da criação: o navegador só apaga um cookie __Host-
+	// se a resposta também vier com Secure e Path=/.
+	http.SetCookie(w, &http.Cookie{
+		Name: h.nomeCookie(), Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: h.cfg.cookieSeguro, SameSite: http.SameSiteStrictMode,
+	})
 	jsonOK(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -309,4 +347,15 @@ func anexo(w http.ResponseWriter, tipo, nome string, corpo []byte) {
 	w.Header().Set("Content-Type", tipo)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", nome))
 	_, _ = w.Write(corpo)
+}
+
+// soDigitos normaliza o CPF para servir de chave nos limitadores.
+func soDigitos(s string) string {
+	b := make([]byte, 0, 11)
+	for i := 0; i < len(s) && len(b) < 16; i++ {
+		if s[i] >= '0' && s[i] <= '9' {
+			b = append(b, s[i])
+		}
+	}
+	return string(b)
 }

@@ -78,9 +78,10 @@ chown "$APP_USER:$APP_USER" /home/$APP_USER/.bashrc
 echo "==> Build e subida (pode levar alguns minutos)"
 COMPOSE="docker compose -p lcr -f docker-compose.yml -f deploy/docker-compose.prod.yml"
 if dpkg -s docker-buildx >/dev/null 2>&1; then
-  como_app "cd $DEST && $COMPOSE build && $COMPOSE up -d"
+  # --pull: sempre parte das imagens base atuais (correções de segurança do Go e do Alpine).
+  como_app "cd $DEST && $COMPOSE build --pull && $COMPOSE up -d"
 else
-  como_app "cd $DEST && DOCKER_BUILDKIT=0 docker build -t lcr-app:latest . && $COMPOSE up -d --no-build"
+  como_app "cd $DEST && DOCKER_BUILDKIT=0 docker build --pull -t lcr-app:latest . && $COMPOSE up -d --no-build"
 fi
 
 echo "==> Aguardando a aplicação em 127.0.0.1:$PORTA"

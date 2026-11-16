@@ -44,8 +44,8 @@ open("original.pdf","wb").write(out)
 PY
 
 echo "🪪 1. Contas"
-conta "Ana E2E" $(cpf) senha-ana-123 ana.txt; conta "Beto E2E" $(cpf) senha-beto-123 beto.txt; conta "Carla E2E" $(cpf) senha-carla-123 carla.txt
-check "$(curl -s -b ana.txt $B/api/eu | python3 -c 'import json,sys;print(json.load(sys.stdin)["nome"])')" "Ana E2E" "Ana logada"
+conta "Ana Teste" $(cpf) senha-ana-123 ana.txt; conta "Beto Teste" $(cpf) senha-beto-123 beto.txt; conta "Carla Teste" $(cpf) senha-carla-123 carla.txt
+check "$(curl -s -b ana.txt $B/api/eu | python3 -c 'import json,sys;print(json.load(sys.stdin)["nome"])')" "Ana Teste" "Ana logada"
 
 echo "🖋️ 2. Ana assina; Beto assina o PDF da Ana"
 V1=$(assina ana.txt original.pdf v1.pdf senha-ana-123 40)
@@ -59,8 +59,8 @@ check "$(db "select count(*) from documento_chaves where documento_id=$V1")" "1"
 
 echo "👥 4. Quem vê o quê"
 lista() { curl -s -b $1 $B/api/documentos | python3 -c "import json,sys; d={x['id']:x for x in json.load(sys.stdin)}; v=d.get($2); print(' + '.join(v['signatarios']) if v else '-')"; }
-check "$(lista ana.txt $V2)" "Ana E2E + Beto E2E" "Ana vê v2 com os dois signatários"
-check "$(lista beto.txt $V2)" "Ana E2E + Beto E2E" "Beto vê v2 com os dois signatários"
+check "$(lista ana.txt $V2)" "Ana Teste + Beto Teste" "Ana vê v2 com os dois signatários"
+check "$(lista beto.txt $V2)" "Ana Teste + Beto Teste" "Beto vê v2 com os dois signatários"
 check "$(lista beto.txt $V1)" "-" "Beto não vê v1 (não assinou)"
 check "$(lista carla.txt $V2)" "-" "Carla não vê v2 (não assinou)"
 

@@ -69,14 +69,14 @@ func (s *Assinaturas) Assinar(ctx context.Context, cmd port.ComandoAssinar) (*do
 
 	assinado, err := s.d.Assinador.Assinar(ctx, port.PedidoAssinaturaPDF{
 		PDF: cmd.PDF, CertPEM: cert.CertPEM, ChavePKCS8: chave, CadeiaPEM: s.d.AC.CadeiaPEM(),
-		Nome: u.Nome, CPF: u.CPF, Motivo: strings.TrimSpace(cmd.Motivo), Local: s.cfg.local,
+		Nome: u.Nome, CPF: u.CPF, Motivo: domain.NormalizaMotivo(cmd.Motivo), Local: s.cfg.local,
 		Posicao: cmd.Posicao, Data: agora, URLValidar: s.cfg.urlPublica + "/validar",
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	base := filepath.Base(cmd.NomeArquivo)
+	base := domain.NomeArquivoSeguro(cmd.NomeArquivo)
 	doc := &domain.Documento{
 		UsuarioID: u.ID, CertificadoID: cert.ID,
 		NomeArquivo:    strings.TrimSuffix(base, filepath.Ext(base)) + "_assinado.pdf",

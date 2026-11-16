@@ -3,6 +3,7 @@ package domain
 import (
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -74,20 +75,33 @@ type Usuario struct {
 	CriadoEm  time.Time
 }
 
-const tamanhoMinimoSenha = 8
+const (
+	tamanhoMinimoSenha = 8
+	// O teto evita que alguém mande senhas gigantes só para gastar CPU.
+	tamanhoMaximoSenha = 128
+)
 
-// NormalizaNome remove espaços duplicados e valida o tamanho.
+// NormalizaNome remove espaços duplicados e valida tamanho e caracteres.
+// Só letras (com acento), espaço, apóstrofo, hífen e ponto. Isso importa
+// para a segurança: o nome vai para o CN do certificado no formato
+// "NOME:CPF", então um ":" ou dígitos no nome permitiriam forjar um CN que
+// aparenta ter o CPF de outra pessoa.
 func NormalizaNome(nome string) (string, error) {
 	n := strings.Join(strings.Fields(nome), " ")
 	if c := utf8.RuneCountInString(n); c < 3 || c > 80 {
 		return "", ErrNomeInvalido
 	}
+	for _, r := range n {
+		if !unicode.IsLetter(r) && !unicode.IsMark(r) && !strings.ContainsRune(" '-.", r) {
+			return "", ErrNomeInvalido
+		}
+	}
 	return n, nil
 }
 
-// ValidaSenhaNova aplica a política mínima de senha.
+// ValidaSenhaNova aplica a política de senha.
 func ValidaSenhaNova(senha string) error {
-	if utf8.RuneCountInString(senha) < tamanhoMinimoSenha {
+	if c := utf8.RuneCountInString(senha); c < tamanhoMinimoSenha || c > tamanhoMaximoSenha {
 		return ErrSenhaFraca
 	}
 	return nil

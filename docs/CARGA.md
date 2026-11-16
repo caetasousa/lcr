@@ -66,8 +66,10 @@ Instalação de **teste isolada** (banco próprio, porta 8490, container limitad
 
 ⚠️ Use **sempre uma instalação de teste**: o gerador cria contas de verdade no banco.
 
+🚪 Todos os usuários virtuais saem do mesmo IP, então os [limites de tentativas](SEGURANCA.md#forca-bruta) barrariam o teste (como devem). Por isso a instalação de teste sobe com `RATE_LIMIT=off`. Em produção essa opção é **recusada**.
+
 ```bash
-docker compose up -d --build                      # instalação local de teste
+RATE_LIMIT=off docker compose up -d --build       # instalação local de teste, sem limite de tentativas
 cd backend
 go run ./cmd/carga -url http://localhost:8080 -usuarios 60 -kb 500
 ```

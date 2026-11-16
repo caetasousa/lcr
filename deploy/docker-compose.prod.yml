@@ -16,6 +16,11 @@ services:
       # Link oficial: vai no carimbo ("Verifique em lcr.d4ffy.com/validar") e
       # nas URLs de LCR/AIA dos certificados. Fixo aqui para não depender do .env.
       PUBLIC_URL: https://lcr.d4ffy.com
+      # Todo acesso chega pelo túnel da Cloudflare, que grava o IP real do
+      # visitante neste cabeçalho (e sobrescreve qualquer valor forjado).
+      # Sem isso, os limites por IP veriam todo mundo como um só endereço.
+      IP_HEADER: CF-Connecting-IP
+      RATE_LIMIT: "on"
       # O túnel entrega HTTPS ao navegador: o cookie de sessão pode ser Secure.
       COOKIE_SECURE: "true"
     ports: !override

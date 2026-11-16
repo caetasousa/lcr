@@ -1,0 +1,60 @@
+# 🛡️ A cada push: testes, análise estática e varredura de vulnerabilidades
+# conhecidas nas dependências (Go e npm).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Formatação
+        run: test -z "$(gofmt -l .)"
+      - name: Análise estática
+        run: go vet ./...
+      - name: Testes (com detector de corrida)
+        run: go test -race ./...
+      - name: Vulnerabilidades conhecidas (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Tipos e build
+        run: npm run build
+      - name: Vulnerabilidades conhecidas (npm audit)
+        run: npm audit --audit-level=high
+
+  imagem:
+    name: Imagem Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build da imagem de produção
+        run: docker build --pull -t lcr-app:ci .

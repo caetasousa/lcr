@@ -32,6 +32,16 @@ Base: `http://localhost:8080` (local) ou `https://lcr.d4ffy.com` (produção).
 | `POST` | `/api/certificado/revogar` | JSON `{senha, motivo}` | 🚫 revoga (motivo = código CRLReason: 0, 1, 3, 4, 5) |
 | `POST` | `/api/certificado/renovar` | JSON `{senha}` | 🔄 novo par de chaves e novo certificado |
 
+## 🛡️ Respostas de proteção
+
+| Status | Quando |
+|---|---|
+| `403` | senha incorreta, ou requisição de **outra origem** (CSRF) |
+| `429` | limite de tentativas estourado; o cabeçalho `Retry-After` diz quantos segundos esperar |
+| `503` | servidor ocupado (fila de PDFs cheia por mais de 30 s) |
+
+Os limites estão em [SEGURANCA.md](SEGURANCA.md#forca-bruta).
+
 📏 PDFs: até **20 MiB**, e o arquivo precisa começar com `%PDF-`.
 
 ## 🧪 Exemplos com `curl`

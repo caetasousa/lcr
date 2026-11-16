@@ -10,9 +10,9 @@ import "errors"
 // (por exemplo, status HTTP); o domínio não sabe que HTTP existe.
 var (
 	ErrNaoEncontrado          = errors.New("registro não encontrado")
-	ErrNomeInvalido           = errors.New("informe o nome completo (3 a 80 caracteres)")
+	ErrNomeInvalido           = errors.New("informe o nome completo (3 a 80 letras, sem números nem símbolos)")
 	ErrCPFInvalido            = errors.New("CPF inválido")
-	ErrSenhaFraca             = errors.New("a senha deve ter pelo menos 8 caracteres")
+	ErrSenhaFraca             = errors.New("a senha deve ter de 8 a 128 caracteres")
 	ErrCPFJaCadastrado        = errors.New("já existe uma conta com este CPF")
 	ErrCredenciaisInvalidas   = errors.New("CPF ou senha incorretos")
 	ErrSessaoInvalida         = errors.New("sessão expirada, faça login novamente")

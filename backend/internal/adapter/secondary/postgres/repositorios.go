@@ -135,6 +135,11 @@ var _ port.SessaoRepository = (*Sessoes)(nil)
 func NovoSessoes(db *pgxpool.Pool) *Sessoes { return &Sessoes{db: db} }
 
 func (r *Sessoes) Criar(ctx context.Context, hash []byte, usuarioID int64, expira time.Time) error {
+	// Aproveita para apagar as sessões vencidas: a tabela não cresce sem
+	// limite mesmo que ninguém clique em "sair".
+	if _, err := r.db.Exec(ctx, `DELETE FROM sessoes WHERE expira_em < now()`); err != nil {
+		return err
+	}
 	_, err := r.db.Exec(ctx, `INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES ($1,$2,$3)`, hash, usuarioID, expira)
 	return err
 }

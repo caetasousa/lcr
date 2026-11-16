@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -105,5 +106,52 @@ func TestNovaPosicao(t *testing.T) {
 	}
 	if _, err := NovaPosicao(1, 0, 0, 10, 10); err == nil {
 		t.Error("carimbo minúsculo deveria ser recusado")
+	}
+}
+
+func TestNomeNaoPodeForjarOCNDoCertificado(t *testing.T) {
+	// O CN é "NOME:CPF": um nome com ":" ou dígitos poderia imitar o CPF de outra pessoa.
+	for _, ruim := range []string{"Maria Silva:11144477735", "Joao 11144477735", "Ana <script>", "Zé\x00Silva", "A/B", "ab"} {
+		if _, err := NormalizaNome(ruim); err == nil {
+			t.Errorf("nome %q deveria ser recusado", ruim)
+		}
+	}
+	for _, bom := range []string{"Maria da Conceição", "José D'Ávila", "Ana-Clara Souza Jr.", "  João   Pereira "} {
+		if _, err := NormalizaNome(bom); err != nil {
+			t.Errorf("nome %q deveria ser aceito: %v", bom, err)
+		}
+	}
+}
+
+func TestSenhaTemMinimoEMaximo(t *testing.T) {
+	if ValidaSenhaNova("1234567") == nil || ValidaSenhaNova(strings.Repeat("a", 129)) == nil {
+		t.Error("senha curta demais ou gigante deveria ser recusada")
+	}
+	if ValidaSenhaNova("12345678") != nil || ValidaSenhaNova(strings.Repeat("a", 128)) != nil {
+		t.Error("limites 8 e 128 deveriam ser aceitos")
+	}
+}
+
+func TestNomeDeArquivoEMotivoSaoSaneados(t *testing.T) {
+	casos := map[string]string{
+		"contrato.pdf":                    "contrato.pdf",
+		"../../etc/passwd":                "passwd.pdf",
+		`C:\Users\x\nota fiscal.PDF`:      "nota fiscal.pdf",
+		"a\"b\r\nSet-Cookie: x.pdf":       "a_bSet-Cookie_ x.pdf",
+		"fatura\u202Efdp.exe":             "faturafdp.exe.pdf",
+		"":                                "documento.pdf",
+		"...":                             "documento.pdf",
+		strings.Repeat("a", 300) + ".pdf": strings.Repeat("a", 100) + ".pdf",
+	}
+	for entrada, quer := range casos {
+		if got := NomeArquivoSeguro(entrada); got != quer {
+			t.Errorf("NomeArquivoSeguro(%q) = %q, queria %q", entrada, got, quer)
+		}
+	}
+	if m := NormalizaMotivo("  Aceite\tdo\n contrato\x00 "); m != "Aceite do contrato" {
+		t.Errorf("motivo: %q", m)
+	}
+	if m := NormalizaMotivo(strings.Repeat("x", 500)); len([]rune(m)) != 120 {
+		t.Errorf("motivo deveria ser cortado em 120: %d", len([]rune(m)))
 	}
 }

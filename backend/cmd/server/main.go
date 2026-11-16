@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata" // fuso America/Sao_Paulo mesmo em imagens mínimas
@@ -34,7 +35,13 @@ type configuracao struct {
 	fuso         *time.Location
 	limiteArgon2 int // cálculos Argon2id simultâneos (64 MiB cada)
 	limitePDF    int // requisições com PDF simultâneas
+	cabecalhoIP  string
+	semTaxa      bool
 }
+
+// Credenciais de desenvolvimento publicadas no .env.example. Servem para
+// rodar localmente, mas são conhecidas de qualquer pessoa.
+var segredosDeDesenvolvimento = []string{"lcr-local-dev-ac-2026", "lcr-local-dev-pg-2026", "troque-esta-senha-da-ac", "acme-dev-123"}
 
 func inteiroPositivo(k string, padrao int) (int, error) {
 	v := os.Getenv(k)
@@ -78,8 +85,26 @@ func lerConfiguracao() (configuracao, error) {
 	if c.limitePDF, errL = inteiroPositivo("LIMITE_PDF", 4); errL != nil {
 		return c, errL
 	}
+	c.cabecalhoIP = os.Getenv("IP_HEADER")
+	c.semTaxa = os.Getenv("RATE_LIMIT") == "off"
 	if len(c.senhaAC) < 12 {
 		return c, errors.New("defina AC_SENHA (mínimo 12 caracteres): ela protege as chaves privadas da AC")
+	}
+	// Em produção (HTTPS) o servidor se recusa a subir com segredos públicos
+	// ou com as proteções desligadas: melhor falhar na partida do que rodar
+	// inseguro sem ninguém perceber.
+	if c.cookieSeguro {
+		for _, s := range segredosDeDesenvolvimento {
+			if c.senhaAC == s || strings.Contains(c.databaseURL, s) {
+				return c, errors.New("produção (COOKIE_SECURE=true) com senha de desenvolvimento: gere AC_SENHA e POSTGRES_PASSWORD próprios")
+			}
+		}
+		if c.semTaxa {
+			return c, errors.New("RATE_LIMIT=off não é permitido em produção (COOKIE_SECURE=true)")
+		}
+		if !strings.HasPrefix(c.urlPublica, "https://") {
+			return c, errors.New("produção (COOKIE_SECURE=true) exige PUBLIC_URL com https://")
+		}
 	}
 	return c, nil
 }
@@ -164,14 +189,24 @@ func run() error {
 	}
 
 	// ---------- adaptador primário ----------
+	opcoesHTTP := []httpadapter.Opcao{
+		httpadapter.ComDiretorioEstatico(cfg.estatico), httpadapter.ComCookieSeguro(cfg.cookieSeguro),
+		httpadapter.ComLimiteDePDFs(cfg.limitePDF, 30*time.Second),
+	}
+	if cfg.cabecalhoIP != "" {
+		opcoesHTTP = append(opcoesHTTP, httpadapter.ComCabecalhoDeIP(cfg.cabecalhoIP))
+	}
+	if cfg.semTaxa {
+		slog.Warn("limites de tentativas DESLIGADOS (RATE_LIMIT=off): use só em teste de carga")
+		opcoesHTTP = append(opcoesHTTP, httpadapter.SemLimiteDeTaxa())
+	}
 	handler, err := httpadapter.Novo(httpadapter.Servicos{
 		Conta:        conta,
 		Certificados: certSvc,
 		Assinaturas:  assinSvc,
 		Validacao:    service.NovaValidacao(service.ValidacaoDeps{Certificados: certificados, AC: ac, Validador: validador}),
 		AC:           service.NovaAC(certificados, ac),
-	}, httpadapter.ComDiretorioEstatico(cfg.estatico), httpadapter.ComCookieSeguro(cfg.cookieSeguro),
-		httpadapter.ComLimiteDePDFs(cfg.limitePDF, 30*time.Second))
+	}, opcoesHTTP...)
 	if err != nil {
 		return err
 	}
@@ -180,6 +215,7 @@ func run() error {
 		Addr:              ":" + cfg.porta,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		MaxHeaderBytes:    64 << 10,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,

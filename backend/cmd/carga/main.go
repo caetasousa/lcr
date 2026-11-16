@@ -5,6 +5,8 @@
 //	go run ./cmd/carga -url http://localhost:8080 -usuarios 60 -kb 500
 //
 // Use sempre numa instalação de TESTE: ele cria contas de verdade no banco.
+// Como todos os usuários virtuais saem do mesmo IP, suba essa instalação com
+// RATE_LIMIT=off (senão os limites de tentativas barram o teste, como devem).
 package main
 
 import (
@@ -51,7 +53,7 @@ func main() {
 	for i := range us {
 		jar, _ := cookiejar.New(nil)
 		us[i] = &usuario{
-			nome:  fmt.Sprintf("Carga %s %03d", execucao, i+1),
+			nome:  "Carga " + emLetras(execucao) + " " + emLetras(fmt.Sprintf("%03d", i+1)), // nomes só aceitam letras
 			cpf:   gerarCPF(),
 			senha: "senha-de-carga-123",
 			http: &http.Client{Jar: jar, Timeout: 3 * time.Minute, Transport: &http.Transport{
@@ -237,6 +239,15 @@ func gerarPDF(tamanho int) []byte {
 	}
 	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, xref)
 	return b.Bytes()
+}
+
+// emLetras troca cada dígito por uma letra (0→a ... 9→j).
+func emLetras(digitos string) string {
+	b := []byte(digitos)
+	for i, c := range b {
+		b[i] = 'a' + (c - '0')
+	}
+	return string(b)
 }
 
 // gerarCPF devolve um CPF aleatório com dígitos verificadores válidos.

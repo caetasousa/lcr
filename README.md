@@ -203,6 +203,7 @@ Pronto: abra 👉 **http://localhost:8080**
 * ✍️ **Assinatura:** SHA-256 do PDF → assinado com **RSA PKCS#1 v1.5** → envelope **CMS** (PAdES-B-B) gravado dentro do próprio PDF.
 * 🔑 **Chave privada do usuário:** fica no servidor (como no gov.br), **cifrada com a senha dele**: Argon2id deriva a chave e o AES-256-GCM cifra.
 * 📦 **Armazenamento:** cada PDF fica cifrado com **AES-256-GCM**, e a chave dele é cifrada com **RSA-OAEP** para cada signatário. Só quem assinou abre, e o arquivo devolvido é idêntico ao assinado (SHA-256 conferido).
+* 🛡️ **Aplicação:** limites de tentativas, proteção contra CSRF (inclusive de subdomínios vizinhos), CSP, cookie `__Host-`, containers endurecidos e trilha de auditoria. Veja [docs/SEGURANCA.md](docs/SEGURANCA.md).
 * 🚫 **Revogação:** LCR (lista de certificados revogados) assinada pela AC Intermediária, com os motivos da RFC 5280.
 
 👉 **A explicação completa, passo a passo, está em [docs/CERTIFICADOS.md](docs/CERTIFICADOS.md).**
@@ -220,6 +221,7 @@ Pronto: abra 👉 **http://localhost:8080**
 | 🏗️ entender **como o código está organizado** | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) |
 | 🔌 chamar a API **de outro programa ou do terminal** | [docs/API.md](docs/API.md) |
 | ☁️ **publicar no servidor** | [docs/DEPLOY.md](docs/DEPLOY.md) |
+| 🛡️ ver **as defesas de segurança** e como testá-las | [docs/SEGURANCA.md](docs/SEGURANCA.md): força bruta, CSRF, CSP, uploads, containers, auditoria |
 | 🏋️ saber **quantos acessos simultâneos aguenta** | [docs/CARGA.md](docs/CARGA.md): 60 usuários juntos, antes e depois dos limitadores |
 
 ---
@@ -251,7 +253,8 @@ cd frontend && npm install && npm run dev                    # 🎨 Vite (redire
 
 ```bash
 cd backend && go test -race ./...
-bash scripts/e2e-documentos.sh
+bash scripts/e2e-documentos.sh   # armazenamento cifrado (24 itens)
+bash scripts/e2e-seguranca.sh    # ataques e defesas (54 itens)
 ```
 
 ---
@@ -263,6 +266,6 @@ bash scripts/e2e-documentos.sh
 * ⏱️ **Sem carimbo de tempo** (ACT / RFC 3161): a data da assinatura é a declarada pelo servidor.
 * 📦 **PAdES-B-B:** a LCR não vai dentro do PDF (níveis B-LT/B-LTA), então a validação de longo prazo depende de a AC continuar online.
 * 🏛️ A AC ACME não faz parte da ICP-Brasil: no Adobe Reader a assinatura aparece como "identidade desconhecida" até a raiz ser instalada como confiável.
-* 🛑 Não há limite de tentativas de login além do custo do Argon2id.
+* 🔁 Não há segundo fator (2FA) nem recuperação de senha: quem esquece a senha perde o acesso à chave privada.
 
 > 📌 Projeto didático, **sem validade jurídica**.

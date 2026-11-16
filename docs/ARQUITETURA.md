@@ -173,5 +173,7 @@ frontend/src/
 | `LIMITE_ARGON2` | `4` | 🧂 cálculos Argon2id simultâneos (64 MiB cada) |
 | `LIMITE_PDF` | `4` | 📄 requisições com PDF simultâneas (o resto espera; 503 após 30 s) |
 | `GOMEMLIMIT` | `768MiB` | 🧹 alvo de memória do coletor de lixo do Go |
+| `RATE_LIMIT` | `on` | 🚪 limites de tentativas; `off` só para teste de carga (recusado em produção) |
+| `IP_HEADER` | vazio | 🌍 cabeçalho do proxy confiável com o IP real (`CF-Connecting-IP` em produção) |
 | `PORT` | `8080` | porta HTTP |
 | `STATIC_DIR` | `/app/web` | pasta do frontend compilado |
