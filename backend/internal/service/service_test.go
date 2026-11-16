@@ -61,6 +61,22 @@ func (m *memCerts) Atual(_ context.Context, uid int64) (*domain.Certificado, err
 	return nil, domain.ErrNaoEncontrado
 }
 func (m *memCerts) SalvarRevogacao(context.Context, *domain.Certificado) error { return nil }
+func (m *memCerts) PorID(_ context.Context, id int64) (*domain.Certificado, error) {
+	for _, c := range m.lista {
+		if c.ID == id {
+			return c, nil
+		}
+	}
+	return nil, domain.ErrNaoEncontrado
+}
+func (m *memCerts) PorSerial(_ context.Context, serial string) (*domain.Certificado, error) {
+	for _, c := range m.lista {
+		if c.Serial == serial {
+			return c, nil
+		}
+	}
+	return nil, domain.ErrNaoEncontrado
+}
 func (m *memCerts) Revogados(context.Context) ([]domain.Revogacao, error) {
 	var out []domain.Revogacao
 	for _, c := range m.lista {
@@ -85,16 +101,83 @@ func (m *memSessoes) UsuarioDe(_ context.Context, h []byte, _ time.Time) (int64,
 }
 func (m *memSessoes) Apagar(_ context.Context, h []byte) error { delete(m.s, string(h)); return nil }
 
-type memDocs struct{ docs []domain.Documento }
+// memDocs guarda documentos e chaves de acesso como o banco faria.
+type memDocs struct {
+	certs  *memCerts
+	docs   []domain.Documento
+	chaves map[int64][]domain.ChaveDocumento
+}
 
-func (m *memDocs) Salvar(_ context.Context, d *domain.Documento) error {
+func (m *memDocs) Salvar(_ context.Context, d *domain.Documento, ch []domain.ChaveDocumento) error {
 	d.ID = int64(len(m.docs) + 1)
 	m.docs = append(m.docs, *d)
+	m.chaves[d.ID] = ch
 	return nil
 }
-func (m *memDocs) DoUsuario(context.Context, int64) ([]domain.Documento, error) { return m.docs, nil }
-func (m *memDocs) Buscar(context.Context, int64, int64) (*domain.Documento, error) {
-	return nil, domain.ErrNaoEncontrado
+func (m *memDocs) temAcesso(docID, uid int64) *domain.ChaveDocumento {
+	for _, k := range m.chaves[docID] {
+		if c, _ := m.certs.PorID(context.Background(), k.CertificadoID); c != nil && c.UsuarioID == uid {
+			return &k
+		}
+	}
+	return nil
+}
+func (m *memDocs) DoUsuario(_ context.Context, uid int64) ([]domain.Documento, error) {
+	var out []domain.Documento
+	for _, d := range m.docs {
+		if m.temAcesso(d.ID, uid) != nil {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+func (m *memDocs) Buscar(_ context.Context, uid, id int64) (*domain.Documento, *domain.ChaveDocumento, error) {
+	for _, d := range m.docs {
+		if k := m.temAcesso(d.ID, uid); d.ID == id && k != nil {
+			cp := d
+			return &cp, k, nil
+		}
+	}
+	return nil, nil, domain.ErrNaoEncontrado
+}
+func (m *memDocs) Legados(context.Context) ([]domain.Documento, error) { return nil, nil }
+func (m *memDocs) CifrarLegado(context.Context, *domain.Documento, []domain.ChaveDocumento) error {
+	return nil
+}
+
+// fakeCifrador: "cifra" invertendo os bytes; a chave de cada destinatário é
+// o próprio PEM, e só abre com a chave privada "CHAVE".
+type fakeCifrador struct{}
+
+func inverte(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		out[i] = b[len(b)-1-i]
+	}
+	return out
+}
+func (fakeCifrador) Cifrar(pdf []byte, dest [][]byte) ([]byte, [][]byte, error) {
+	return inverte(pdf), dest, nil
+}
+func (fakeCifrador) Decifrar(c, _, priv []byte) ([]byte, error) {
+	if string(priv) != "CHAVE" {
+		return nil, domain.ErrDocumentoCorrompido
+	}
+	return inverte(c), nil
+}
+
+// fakeValidadorSignatarios devolve, como "assinaturas no PDF", os seriais
+// que o assinador falso anexou ("%%ASSINADO:<serial>").
+type fakeValidadorSignatarios struct{}
+
+func (fakeValidadorSignatarios) Validar(_ context.Context, pdf domain.PDF) (*domain.ResultadoValidacao, error) {
+	res := &domain.ResultadoValidacao{}
+	for _, parte := range bytes.Split(pdf, []byte("%%ASSINADO:"))[1:] {
+		res.Assinaturas = append(res.Assinaturas, domain.ResultadoAssinatura{
+			Integra: true, Certificado: &domain.CertInfo{Serial: string(parte)},
+		})
+	}
+	return res, nil
 }
 
 // hasher e cofre "de brinquedo": suficientes para testar o fluxo.
@@ -127,7 +210,7 @@ type fakeAC struct{ emitidos int }
 func (a *fakeAC) Emitir(_ context.Context, nome string, _ domain.CPF) (*domain.Emissao, error) {
 	a.emitidos++
 	agora := time.Now()
-	return &domain.Emissao{Serial: fmt.Sprintf("S%d", a.emitidos), CertPEM: []byte("CERT " + nome),
+	return &domain.Emissao{Serial: fmt.Sprintf("S%d", a.emitidos), CertPEM: []byte(fmt.Sprintf("S%d", a.emitidos)), // o "PEM" falso é o próprio serial
 		ChavePKCS8: []byte("CHAVE"), ValidoDe: agora, ValidoAte: agora.AddDate(1, 0, 0)}, nil
 }
 func (a *fakeAC) GerarLCR(_ context.Context, r []domain.Revogacao) ([]byte, error) {
@@ -161,7 +244,7 @@ type fakeAssinador struct{ chaveRecebida []byte }
 
 func (f *fakeAssinador) Assinar(_ context.Context, p port.PedidoAssinaturaPDF) ([]byte, error) {
 	f.chaveRecebida = bytes.Clone(p.ChavePKCS8)
-	return append(bytes.Clone(p.PDF), "%%ASSINADO"...), nil
+	return append(bytes.Clone(p.PDF), "%%ASSINADO:"+string(p.CertPEM)...), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +254,7 @@ type ambiente struct {
 	certs     *memCerts
 	ac        *fakeAC
 	assinador *fakeAssinador
+	docs      *memDocs
 	conta     *Conta
 	certSvc   *Certificados
 	assin     *Assinaturas
@@ -189,8 +273,10 @@ func novoAmbiente(t *testing.T) *ambiente {
 		t.Fatal(err)
 	}
 	a.certSvc, _ = NovoCertificados(CertificadoDeps{Usuarios: a.usuarios, Certificados: a.certs, Hasher: fakeCripto{}, Cofre: fakeCripto{}, AC: a.ac})
-	a.assin, _ = NovoAssinaturas(AssinaturaDeps{Usuarios: a.usuarios, Certificados: a.certs, Documentos: &memDocs{},
-		Cofre: fakeCripto{}, AC: a.ac, Assinador: a.assinador})
+	a.docs = &memDocs{certs: a.certs, chaves: map[int64][]domain.ChaveDocumento{}}
+	a.assin, _ = NovoAssinaturas(AssinaturaDeps{Usuarios: a.usuarios, Certificados: a.certs, Documentos: a.docs,
+		Cofre: fakeCripto{}, AC: a.ac, Assinador: a.assinador,
+		Validador: fakeValidadorSignatarios{}, Cifrador: fakeCifrador{}})
 	return a
 }
 
@@ -317,5 +403,71 @@ func TestValidacaoAplicaLCR(t *testing.T) {
 	}
 	if out.SHA256 == "" {
 		t.Error("SHA-256 do arquivo não calculado")
+	}
+}
+
+func TestDocumentoCifradoAcessivelATodosOsSignatarios(t *testing.T) {
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	ana, _ := a.conta.Cadastrar(ctx, "Ana Lima", "529.982.247-25", "senha-da-ana")
+	beto, _ := a.conta.Cadastrar(ctx, "Beto Souza", "111.444.777-35", "senha-do-beto")
+	pos, _ := domain.NovaPosicao(1, 40, 40, 300, 110)
+
+	// Ana assina; depois Beto assina o PDF que Ana já assinou.
+	v1, err := a.assin.Assinar(ctx, port.ComandoAssinar{UsuarioID: ana.ID, NomeArquivo: "c.pdf",
+		PDF: domain.PDF("%PDF-1.7 contrato"), Posicao: pos, Senha: "senha-da-ana"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := a.assin.Assinar(ctx, port.ComandoAssinar{UsuarioID: beto.ID, NomeArquivo: "c_assinado.pdf",
+		PDF: domain.PDF(v1.PDFAssinado), Posicao: pos, Senha: "senha-do-beto"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No "banco" fica só o conteúdo cifrado.
+	if bytes.Equal(a.docs.docs[1].Conteudo, v2.PDFAssinado) {
+		t.Fatal("o documento foi gravado em claro")
+	}
+	// A versão com as duas assinaturas aparece para os dois.
+	for _, u := range []*domain.Usuario{ana, beto} {
+		docs, _ := a.assin.Documentos(ctx, u.ID)
+		achou := false
+		for _, d := range docs {
+			achou = achou || d.ID == v2.ID
+		}
+		if !achou {
+			t.Errorf("%s deveria ter acesso ao documento assinado pelos dois", u.Nome)
+		}
+	}
+	// Ana baixa com a própria senha e recebe exatamente os bytes assinados.
+	d, err := a.assin.Documento(ctx, ana.ID, v2.ID, "senha-da-ana")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(d.PDFAssinado, v2.PDFAssinado) {
+		t.Error("o arquivo devolvido difere do assinado")
+	}
+	// Senha errada não abre.
+	if _, err := a.assin.Documento(ctx, ana.ID, v2.ID, "errada"); !errors.Is(err, domain.ErrSenhaIncorreta) {
+		t.Errorf("senha errada: %v", err)
+	}
+	// A primeira versão é só da Ana.
+	if _, err := a.assin.Documento(ctx, beto.ID, v1.ID, "senha-do-beto"); !errors.Is(err, domain.ErrNaoEncontrado) {
+		t.Errorf("Beto não assinou a v1: %v", err)
+	}
+}
+
+func TestDocumentoAlteradoNoBancoNaoEEntregue(t *testing.T) {
+	a := novoAmbiente(t)
+	ctx := context.Background()
+	u, _ := a.conta.Cadastrar(ctx, "Ana Lima", "529.982.247-25", "senha-da-ana")
+	pos, _ := domain.NovaPosicao(1, 40, 40, 300, 110)
+	doc, _ := a.assin.Assinar(ctx, port.ComandoAssinar{UsuarioID: u.ID, NomeArquivo: "c.pdf",
+		PDF: domain.PDF("%PDF-1.7 contrato"), Posicao: pos, Senha: "senha-da-ana"})
+
+	a.docs.docs[0].Conteudo[3] ^= 1 // um bit trocado no armazenamento
+	if _, err := a.assin.Documento(ctx, u.ID, doc.ID, "senha-da-ana"); !errors.Is(err, domain.ErrDocumentoCorrompido) {
+		t.Errorf("documento adulterado deveria ser recusado: %v", err)
 	}
 }

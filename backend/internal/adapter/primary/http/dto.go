@@ -132,6 +132,7 @@ type documentoDTO struct {
 	SHA256Original string    `json:"sha256_original"`
 	SHA256Assinado string    `json:"sha256_assinado"`
 	Tamanho        int       `json:"tamanho"`
+	Signatarios    []string  `json:"signatarios"` // todos que assinaram e têm acesso
 }
 
 type revogadoDTO struct {

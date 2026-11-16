@@ -25,8 +25,8 @@ Base: `http://localhost:8080` (local) ou `https://lcr.d4ffy.com` (produção).
 |---|---|---|---|
 | `GET` | `/api/eu` | — | 👤 usuário logado e o certificado dele |
 | `POST` | `/api/assinar` | multipart: `arquivo`, `pagina`, `x1`, `y1`, `x2`, `y2` (pontos PDF), `senha`, `motivo` | 🖋️ assina e devolve o PDF |
-| `GET` | `/api/documentos` | — | 📂 histórico de documentos assinados |
-| `GET` | `/api/documentos/{id}` | — | 📥 baixa um PDF assinado |
+| `GET` | `/api/documentos` | — | 📂 documentos que você assinou (inclui os assinados também por outras pessoas), com a lista `signatarios` |
+| `POST` | `/api/documentos/{id}` | JSON `{senha}` | 📥 decifra e baixa o PDF. Só para quem assinou; a senha libera a chave privada. `403` senha errada, `404` sem acesso, `422` conteúdo adulterado |
 | `GET` | `/api/certificado.crt` | — | 📥 certificado do usuário (PEM) |
 | `POST` | `/api/certificado/pfx` | JSON `{senha}` | 💾 PKCS#12 (AES-256-CBC + PBKDF2-SHA256) |
 | `POST` | `/api/certificado/revogar` | JSON `{senha, motivo}` | 🚫 revoga (motivo = código CRLReason: 0, 1, 3, 4, 5) |

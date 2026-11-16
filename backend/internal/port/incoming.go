@@ -47,7 +47,11 @@ type ComandoAssinar struct {
 type AssinaturaService interface {
 	Assinar(ctx context.Context, cmd ComandoAssinar) (*domain.Documento, error)
 	Documentos(ctx context.Context, usuarioID int64) ([]domain.Documento, error)
-	Documento(ctx context.Context, usuarioID, id int64) (*domain.Documento, error)
+	// Documento decifra o PDF com a chave privada do usuário (liberada pela
+	// senha) e confere o SHA-256 antes de entregar.
+	Documento(ctx context.Context, usuarioID, id int64, senha string) (*domain.Documento, error)
+	// MigrarLegados cifra os documentos gravados em claro por versões antigas.
+	MigrarLegados(ctx context.Context) (int, error)
 }
 
 // ValidacaoService: validação pública, sem login.

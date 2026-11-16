@@ -94,6 +94,19 @@ CREATE TABLE IF NOT EXISTS documentos (
 	pdf_assinado    BYTEA NOT NULL
 );
 CREATE INDEX IF NOT EXISTS documentos_usuario ON documentos(usuario_id);
+-- Desde a cifra híbrida, pdf_assinado guarda o PDF cifrado (AES-256-GCM).
+-- cifrado=false marca documentos antigos, ainda em claro, a migrar.
+ALTER TABLE documentos ADD COLUMN IF NOT EXISTS cifrado BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE documentos ADD COLUMN IF NOT EXISTS tamanho INT;
+-- Uma linha por signatário: a chave AES do documento cifrada (RSA-OAEP) para
+-- a chave pública do certificado. Ter uma linha aqui = ter acesso.
+CREATE TABLE IF NOT EXISTS documento_chaves (
+	documento_id   BIGINT NOT NULL REFERENCES documentos(id) ON DELETE CASCADE,
+	certificado_id BIGINT NOT NULL REFERENCES certificados(id) ON DELETE CASCADE,
+	chave_cifrada  BYTEA NOT NULL,
+	PRIMARY KEY (documento_id, certificado_id)
+);
+CREATE INDEX IF NOT EXISTS documento_chaves_certificado ON documento_chaves(certificado_id);
 `
 
 // traduz converte erros do driver em erros do domínio.

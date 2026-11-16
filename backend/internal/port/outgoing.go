@@ -21,6 +21,8 @@ type CertificadoRepository interface {
 	Atual(ctx context.Context, usuarioID int64) (*domain.Certificado, error)
 	SalvarRevogacao(ctx context.Context, c *domain.Certificado) error
 	Revogados(ctx context.Context) ([]domain.Revogacao, error)
+	PorID(ctx context.Context, id int64) (*domain.Certificado, error)
+	PorSerial(ctx context.Context, serial string) (*domain.Certificado, error)
 }
 
 type SessaoRepository interface {
@@ -29,10 +31,17 @@ type SessaoRepository interface {
 	Apagar(ctx context.Context, tokenHash []byte) error
 }
 
+// DocumentoRepository guarda os PDFs já cifrados. O acesso de um usuário a
+// um documento é ter uma ChaveDocumento para algum certificado dele.
 type DocumentoRepository interface {
-	Salvar(ctx context.Context, d *domain.Documento) error
+	Salvar(ctx context.Context, d *domain.Documento, chaves []domain.ChaveDocumento) error
+	// DoUsuario lista os documentos a que o usuário tem acesso (assinou).
 	DoUsuario(ctx context.Context, usuarioID int64) ([]domain.Documento, error)
-	Buscar(ctx context.Context, usuarioID, id int64) (*domain.Documento, error)
+	// Buscar devolve o documento cifrado e a chave do usuário para ele.
+	Buscar(ctx context.Context, usuarioID, id int64) (*domain.Documento, *domain.ChaveDocumento, error)
+	// Legados são documentos gravados em claro por versões antigas.
+	Legados(ctx context.Context) ([]domain.Documento, error)
+	CifrarLegado(ctx context.Context, d *domain.Documento, chaves []domain.ChaveDocumento) error
 }
 
 // ArmazemAC guarda o certificado e a chave (selada) de cada nível da AC.
@@ -54,6 +63,17 @@ type HasherSenha interface {
 type Cofre interface {
 	Selar(segredo []byte, senha, contexto string) ([]byte, error)
 	Abrir(blob []byte, senha, contexto string) ([]byte, error)
+}
+
+// CifradorDocumento faz a cifra híbrida dos PDFs arquivados: AES-256-GCM
+// com uma chave aleatória por documento, e essa chave cifrada com RSA-OAEP
+// para a chave pública de cada destinatário (como no S/MIME).
+type CifradorDocumento interface {
+	// Cifrar devolve o PDF cifrado e uma chave cifrada por certificado, na
+	// mesma ordem de destinatarios (certificados em PEM).
+	Cifrar(pdf []byte, destinatarios [][]byte) (conteudo []byte, chaves [][]byte, err error)
+	// Decifrar abre a chave do documento com a chave privada do destinatário.
+	Decifrar(conteudo, chaveCifrada, chavePKCS8 []byte) ([]byte, error)
 }
 
 // GeradorToken cria tokens aleatórios e o hash que vai para o banco.

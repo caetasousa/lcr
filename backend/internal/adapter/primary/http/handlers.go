@@ -233,6 +233,7 @@ func (h *Handler) documentos(w http.ResponseWriter, r *http.Request) {
 		out = append(out, documentoDTO{
 			ID: d.ID, Nome: d.NomeArquivo, Pagina: d.Pagina, AssinadoEm: d.AssinadoEm,
 			SHA256Original: d.SHA256Original, SHA256Assinado: d.SHA256Assinado, Tamanho: d.Tamanho,
+			Signatarios: d.Signatarios,
 		})
 	}
 	jsonOK(w, http.StatusOK, out)
@@ -244,7 +245,12 @@ func (h *Handler) baixaDocumento(w http.ResponseWriter, r *http.Request) {
 		erroJSON(w, http.StatusBadRequest, "id inválido")
 		return
 	}
-	d, err := h.s.Assinaturas.Documento(r.Context(), usuarioID(r), id)
+	var in comSenha
+	if err := lerJSON(r, &in); err != nil {
+		erroJSON(w, http.StatusBadRequest, "JSON inválido")
+		return
+	}
+	d, err := h.s.Assinaturas.Documento(r.Context(), usuarioID(r), id, in.Senha)
 	if err != nil {
 		responderErro(w, r, err)
 		return

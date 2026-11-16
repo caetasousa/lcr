@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -61,13 +62,13 @@ func (r *Certificados) Criar(ctx context.Context, c *domain.Certificado) error {
 		c.UsuarioID, c.Serial, string(c.CertPEM), c.ChaveSelada, c.EmitidoEm, c.ExpiraEm).Scan(&c.ID)
 }
 
-func (r *Certificados) Atual(ctx context.Context, usuarioID int64) (*domain.Certificado, error) {
+const colunasCertificado = `id, usuario_id, serial, cert_pem, chave_selada, emitido_em, expira_em, revogado_em, motivo_revogacao`
+
+func (r *Certificados) um(ctx context.Context, where string, arg any) (*domain.Certificado, error) {
 	c := &domain.Certificado{}
 	var pemTxt string
 	var motivo *int
-	err := r.db.QueryRow(ctx,
-		`SELECT id, usuario_id, serial, cert_pem, chave_selada, emitido_em, expira_em, revogado_em, motivo_revogacao
-		 FROM certificados WHERE usuario_id=$1 ORDER BY id DESC LIMIT 1`, usuarioID).
+	err := r.db.QueryRow(ctx, `SELECT `+colunasCertificado+` FROM certificados WHERE `+where, arg).
 		Scan(&c.ID, &c.UsuarioID, &c.Serial, &pemTxt, &c.ChaveSelada, &c.EmitidoEm, &c.ExpiraEm, &c.RevogadoEm, &motivo)
 	if err != nil {
 		return nil, traduz(err)
@@ -78,6 +79,18 @@ func (r *Certificados) Atual(ctx context.Context, usuarioID int64) (*domain.Cert
 		c.Motivo = &m
 	}
 	return c, nil
+}
+
+func (r *Certificados) Atual(ctx context.Context, usuarioID int64) (*domain.Certificado, error) {
+	return r.um(ctx, "usuario_id=$1 ORDER BY id DESC LIMIT 1", usuarioID)
+}
+
+func (r *Certificados) PorID(ctx context.Context, id int64) (*domain.Certificado, error) {
+	return r.um(ctx, "id=$1", id)
+}
+
+func (r *Certificados) PorSerial(ctx context.Context, serial string) (*domain.Certificado, error) {
+	return r.um(ctx, "serial=$1", serial)
 }
 
 func (r *Certificados) SalvarRevogacao(ctx context.Context, c *domain.Certificado) error {
@@ -146,33 +159,104 @@ var _ port.DocumentoRepository = (*Documentos)(nil)
 
 func NovoDocumentos(db *pgxpool.Pool) *Documentos { return &Documentos{db: db} }
 
-func (r *Documentos) Salvar(ctx context.Context, d *domain.Documento) error {
-	return r.db.QueryRow(ctx,
-		`INSERT INTO documentos (usuario_id, certificado_id, nome_arquivo, sha256_original, sha256_assinado, pagina, assinado_em, pdf_assinado)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-		d.UsuarioID, d.CertificadoID, d.NomeArquivo, d.SHA256Original, d.SHA256Assinado, d.Pagina, d.AssinadoEm, d.PDFAssinado).Scan(&d.ID)
+// Salvar grava o documento cifrado e as chaves de acesso numa transação:
+// nunca existe documento sem ao menos um signatário capaz de abri-lo.
+func (r *Documentos) Salvar(ctx context.Context, d *domain.Documento, chaves []domain.ChaveDocumento) error {
+	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`INSERT INTO documentos (usuario_id, certificado_id, nome_arquivo, sha256_original, sha256_assinado, pagina, assinado_em, pdf_assinado, tamanho, cifrado)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING id`,
+			d.UsuarioID, d.CertificadoID, d.NomeArquivo, d.SHA256Original, d.SHA256Assinado, d.Pagina, d.AssinadoEm, d.Conteudo, d.Tamanho).Scan(&d.ID)
+		if err != nil {
+			return err
+		}
+		return inserirChaves(ctx, tx, d.ID, chaves)
+	})
+}
+
+func inserirChaves(ctx context.Context, tx pgx.Tx, docID int64, chaves []domain.ChaveDocumento) error {
+	if len(chaves) == 0 {
+		return errors.New("documento sem chave de acesso")
+	}
+	for _, k := range chaves {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO documento_chaves (documento_id, certificado_id, chave_cifrada) VALUES ($1,$2,$3)
+			 ON CONFLICT (documento_id, certificado_id) DO NOTHING`,
+			docID, k.CertificadoID, k.ChaveCifrada); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Documentos) DoUsuario(ctx context.Context, usuarioID int64) ([]domain.Documento, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, nome_arquivo, sha256_original, sha256_assinado, pagina, assinado_em, octet_length(pdf_assinado)
-		 FROM documentos WHERE usuario_id=$1 ORDER BY id DESC LIMIT 500`, usuarioID)
+		`SELECT d.id, d.nome_arquivo, d.sha256_original, d.sha256_assinado, d.pagina, d.assinado_em,
+		        COALESCE(d.tamanho, octet_length(d.pdf_assinado)),
+		        ARRAY(SELECT DISTINCT u.nome FROM documento_chaves k
+		              JOIN certificados c ON c.id = k.certificado_id
+		              JOIN usuarios u ON u.id = c.usuario_id
+		              WHERE k.documento_id = d.id ORDER BY u.nome)
+		 FROM documentos d
+		 WHERE d.cifrado AND EXISTS (
+		       SELECT 1 FROM documento_chaves k JOIN certificados c ON c.id = k.certificado_id
+		       WHERE k.documento_id = d.id AND c.usuario_id = $1)
+		 ORDER BY d.id DESC LIMIT 500`, usuarioID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Documento, error) {
 		var d domain.Documento
-		err := row.Scan(&d.ID, &d.NomeArquivo, &d.SHA256Original, &d.SHA256Assinado, &d.Pagina, &d.AssinadoEm, &d.Tamanho)
+		err := row.Scan(&d.ID, &d.NomeArquivo, &d.SHA256Original, &d.SHA256Assinado, &d.Pagina, &d.AssinadoEm, &d.Tamanho, &d.Signatarios)
 		return d, err
 	})
 }
 
-func (r *Documentos) Buscar(ctx context.Context, usuarioID, id int64) (*domain.Documento, error) {
+func (r *Documentos) Buscar(ctx context.Context, usuarioID, id int64) (*domain.Documento, *domain.ChaveDocumento, error) {
 	d := &domain.Documento{}
+	k := &domain.ChaveDocumento{}
 	err := r.db.QueryRow(ctx,
-		`SELECT id, nome_arquivo, pdf_assinado FROM documentos WHERE id=$1 AND usuario_id=$2`, id, usuarioID).
-		Scan(&d.ID, &d.NomeArquivo, &d.PDFAssinado)
-	return d, traduz(err)
+		`SELECT d.id, d.nome_arquivo, d.sha256_assinado, d.pdf_assinado, k.certificado_id, k.chave_cifrada
+		 FROM documentos d
+		 JOIN documento_chaves k ON k.documento_id = d.id
+		 JOIN certificados c ON c.id = k.certificado_id
+		 WHERE d.id = $1 AND c.usuario_id = $2 AND d.cifrado
+		 ORDER BY c.id DESC LIMIT 1`, id, usuarioID).
+		Scan(&d.ID, &d.NomeArquivo, &d.SHA256Assinado, &d.Conteudo, &k.CertificadoID, &k.ChaveCifrada)
+	if err != nil {
+		return nil, nil, traduz(err)
+	}
+	return d, k, nil
+}
+
+func (r *Documentos) Legados(ctx context.Context) ([]domain.Documento, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, usuario_id, certificado_id, sha256_assinado, pdf_assinado FROM documentos WHERE NOT cifrado ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Documento, error) {
+		var d domain.Documento
+		err := row.Scan(&d.ID, &d.UsuarioID, &d.CertificadoID, &d.SHA256Assinado, &d.Conteudo)
+		return d, err
+	})
+}
+
+// CifrarLegado troca o PDF em claro pelo cifrado e grava as chaves, na mesma
+// transação. Se o documento já tiver sido migrado, devolve ErrNaoEncontrado.
+func (r *Documentos) CifrarLegado(ctx context.Context, d *domain.Documento, chaves []domain.ChaveDocumento) error {
+	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`UPDATE documentos SET pdf_assinado=$2, tamanho=octet_length(pdf_assinado), cifrado=true WHERE id=$1 AND NOT cifrado`,
+			d.ID, d.Conteudo)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return domain.ErrNaoEncontrado
+		}
+		return inserirChaves(ctx, tx, d.ID, chaves)
+	})
 }
 
 // ---------- Armazém da AC ----------

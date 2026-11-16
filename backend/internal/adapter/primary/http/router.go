@@ -80,7 +80,8 @@ func Novo(s Servicos, opts ...Opcao) (http.Handler, error) {
 	m.Handle("GET /api/eu", h.autenticado(h.eu))
 	m.Handle("POST /api/assinar", h.autenticado(h.assinar))
 	m.Handle("GET /api/documentos", h.autenticado(h.documentos))
-	m.Handle("GET /api/documentos/{id}", h.autenticado(h.baixaDocumento))
+	// POST: o corpo leva a senha, que libera a chave privada para decifrar.
+	m.Handle("POST /api/documentos/{id}", h.autenticado(h.baixaDocumento))
 	m.Handle("GET /api/certificado.crt", h.autenticado(h.baixaCertificado))
 	m.Handle("POST /api/certificado/pfx", h.autenticado(h.exportaPFX))
 	m.Handle("POST /api/certificado/revogar", h.autenticado(h.revogar))

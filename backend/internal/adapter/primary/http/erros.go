@@ -23,6 +23,7 @@ var statusDe = []struct {
 	{domain.ErrMotivoInvalido, http.StatusBadRequest},
 	{domain.ErrPosicaoInvalida, http.StatusUnprocessableEntity},
 	{domain.ErrPDFInvalido, http.StatusUnprocessableEntity},
+	{domain.ErrDocumentoCorrompido, http.StatusUnprocessableEntity},
 	{domain.ErrCPFJaCadastrado, http.StatusConflict},
 	{domain.ErrCertificadoJaRevogado, http.StatusConflict},
 	{domain.ErrCertificadoAindaValido, http.StatusConflict},

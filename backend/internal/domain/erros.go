@@ -24,4 +24,7 @@ var (
 	ErrMotivoInvalido         = errors.New("motivo de revogação inválido")
 	ErrPosicaoInvalida        = errors.New("posição da assinatura inválida")
 	ErrPDFInvalido            = errors.New("o arquivo não é um PDF válido")
+	// ErrDocumentoCorrompido: o PDF decifrado não tem o SHA-256 gravado na
+	// assinatura (ou a tag do AES-GCM não confere). Nunca é entregue.
+	ErrDocumentoCorrompido = errors.New("o documento armazenado não confere com o original assinado e não foi entregue")
 )

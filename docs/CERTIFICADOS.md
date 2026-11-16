@@ -15,7 +15,8 @@ Este documento explica, passo a passo, toda a criptografia do LCR Assina: da cri
 8. [🚫 Revogação e LCR](#revogacao)
 9. [🔄 Renovação](#renovacao)
 10. [💾 Exportação `.pfx`](#pfx)
-11. [📋 Resumo dos algoritmos](#resumo)
+11. [📦 Armazenamento cifrado dos documentos](#armazenamento)
+12. [📋 Resumo dos algoritmos](#resumo)
 
 > 💡 Cada seção começa com um quadro **🗣️ Em palavras simples**. Se você só quer entender a ideia, leia esses quadros. O restante é o detalhe técnico, para o relatório e para quem vai mexer no código.
 
@@ -420,8 +421,89 @@ openssl pkcs12 -in meu_certificado.pfx -info -noout
 
 ---
 
+<a id="armazenamento"></a>
+## 11. 📦 Armazenamento cifrado dos documentos
+
+> 🗣️ **Em palavras simples:** cada PDF assinado fica guardado **trancado** no banco. Cada pessoa que assinou recebe **a sua própria cópia da chave**, trancada com a chave pública dela. Para abrir, você digita a sua senha: ela destrava a sua chave privada, que destrava a chave do documento, que destranca o PDF. Quem não assinou não tem cópia da chave e não abre, nem o administrador do banco.
+
+📄 Código: [`cripto/envelope.go`](../backend/internal/adapter/secondary/cripto/envelope.go) e [`service/assinatura.go`](../backend/internal/service/assinatura.go)
+
+### 🔐 Cifra híbrida (o mesmo princípio do e-mail S/MIME)
+
+```mermaid
+graph LR
+    PDF["📄 PDF assinado"] -->|AES-256-GCM| C["🔒 conteúdo cifrado<br/>(documentos.pdf_assinado)"]
+    DEK["🎲 chave do documento<br/>32 bytes aleatórios"] --> C
+    DEK -->|RSA-OAEP com a chave<br/>pública da Ana| KA["🔑 chave da Ana"]
+    DEK -->|RSA-OAEP com a chave<br/>pública do Beto| KB["🔑 chave do Beto"]
+    KA --> T[("documento_chaves")]
+    KB --> T
+```
+
+| Peça | Algoritmo | Por quê |
+|---|---|---|
+| 🎲 **Chave do documento (DEK)** | 32 bytes de `crypto/rand`, **uma por documento** | se uma vazar, só aquele documento fica exposto |
+| 🔒 **Cifra do PDF** | **AES-256-GCM**, nonce de 12 B, AAD `lcr-documento-v1` | rápido para arquivos grandes, e a tag de 16 B **detecta qualquer alteração** |
+| 🔑 **Chave de cada signatário** | **RSA-OAEP** com SHA-256, rótulo `lcr-documento` | RSA não cifra arquivos grandes, mas cifra bem a chave de 32 bytes, e só a chave privada correspondente a abre |
+
+📦 Formato do conteúdo no banco: `"d1" | nonce (12 B) | AES-256-GCM(PDF) + tag (16 B)`.
+
+### 👥 Quem tem acesso
+
+Ao assinar, o servidor **lê todas as assinaturas que já estão dentro do PDF**, procura os certificados delas no banco e cifra a chave do documento para **cada signatário**. Só assinaturas **criptograficamente íntegras** contam.
+
+| Situação | Ana | Beto | Carla |
+|---|:---:|:---:|:---:|
+| `contrato_assinado.pdf` (só a Ana assinou) | ✅ | ❌ | ❌ |
+| `contrato_assinado_assinado.pdf` (Ana e depois Beto) | ✅ | ✅ | ❌ |
+
+Cada linha da tabela `documento_chaves` é um par (documento, certificado). **Ter uma linha = ter acesso.** A tela **Documentos** mostra a coluna *Assinado por* com todos eles.
+
+### 📥 Abrir um documento
+
+```mermaid
+sequenceDiagram
+    actor U as 👤 Signatário
+    participant API as ⚙️ Servidor
+    participant C as 🗝️ Cofre
+    U->>API: id do documento + senha
+    API->>API: 🔎 busca o conteúdo cifrado e a chave DESTE usuário
+    API->>C: 🔓 senha abre a chave privada RSA (Argon2id + AES-GCM)
+    API->>API: 🔑 RSA-OAEP abre a chave do documento
+    API->>API: 🔒 AES-256-GCM decifra o PDF (a tag confere a integridade)
+    API->>API: 🧮 SHA-256 do PDF == sha256_assinado registrado?
+    API-->>U: 📄 PDF idêntico ao assinado
+    API->>API: 🧹 zera chave privada e chave do documento
+```
+
+### ✅ Fidelidade ao original
+
+O arquivo entregue é **idêntico, byte a byte**, ao que foi assinado. Há duas barreiras independentes:
+
+1. 🔒 a **tag do AES-GCM** recusa qualquer bit alterado no banco;
+2. 🧮 o **SHA-256** do PDF decifrado precisa ser igual ao `sha256_assinado` gravado na hora da assinatura.
+
+Se qualquer uma falhar, o servidor responde *"o documento armazenado não confere com o original assinado"* e **não entrega nada**.
+
+> 📄 O **PDF original** (antes de assinar) também é preservado: a assinatura PAdES só **acrescenta** bytes ao final, então os primeiros bytes do assinado são exatamente o original (o `sha256_original` fica registrado).
+
+### 🔄 Documentos antigos
+
+Versões anteriores guardavam o PDF em claro. Na partida, o servidor **migra automaticamente** cada documento antigo: confere o SHA-256, cifra e dá acesso a todos os signatários encontrados no PDF. Um documento que não confere com o próprio SHA-256 **não é migrado** e fica registrado no log.
+
+### 🧪 Teste de ponta a ponta
+
+[`scripts/e2e-documentos.sh`](../scripts/e2e-documentos.sh) usa a API e o banco reais e confere 24 itens: nada em claro no banco, quem vê o quê, download idêntico byte a byte, senha errada, não signatário, adulteração no banco e migração.
+
+```bash
+docker compose up -d --build
+bash scripts/e2e-documentos.sh
+```
+
+---
+
 <a id="resumo"></a>
-## 11. 📋 Resumo dos algoritmos
+## 12. 📋 Resumo dos algoritmos
 
 > 🗣️ **Em palavras simples:** Tabela de referência com todos os algoritmos e parâmetros usados.
 
@@ -437,5 +519,7 @@ openssl pkcs12 -in meu_certificado.pfx -info -noout
 | 🔐 Cifra do cofre | AES-256-GCM | nonce 12 B, tag 16 B, AAD de contexto | NIST SP 800-38D |
 | 🎟️ Token de sessão | `crypto/rand` | 256 bits, banco guarda SHA-256 | |
 | 🎲 Serial de certificado | `crypto/rand` | 128 bits | CA/B Forum |
+| 📦 Cifra do PDF armazenado | AES-256-GCM | chave aleatória de 32 B por documento, nonce 12 B, tag 16 B | NIST SP 800-38D |
+| 🔑 Chave do documento para cada signatário | RSA-OAEP + SHA-256 | rótulo `lcr-documento` | RFC 8017 |
 | 💾 `.pfx` | PKCS#12 | AES-256-CBC + PBKDF2-SHA256 | RFC 7292 |
 | 🚫 Revogação | LCR X.509 v2 | validade 24 h, motivos CRLReason | RFC 5280 |

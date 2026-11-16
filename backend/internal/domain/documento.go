@@ -47,16 +47,36 @@ func NovoPDF(b []byte) (PDF, error) {
 	return PDF(b), nil
 }
 
-// Documento assinado e arquivado.
+// Documento assinado e arquivado. No banco ele fica sempre cifrado
+// (Conteudo); PDFAssinado só existe em memória, depois de decifrado e de o
+// SHA-256 ter sido conferido.
 type Documento struct {
 	ID             int64
-	UsuarioID      int64
+	UsuarioID      int64 // quem fez esta assinatura
 	CertificadoID  int64
 	NomeArquivo    string
 	SHA256Original string
 	SHA256Assinado string
 	Pagina         int
 	AssinadoEm     time.Time
-	PDFAssinado    []byte
-	Tamanho        int
+	PDFAssinado    []byte   // em claro (só em memória)
+	Conteudo       []byte   // cifrado com AES-256-GCM (o que vai para o banco)
+	Tamanho        int      // tamanho do PDF em claro
+	Signatarios    []string // nomes de todos que têm acesso (todos que assinaram)
+}
+
+// ChaveDocumento é a chave AES do documento cifrada (RSA-OAEP) para a chave
+// pública de um certificado. Existe uma por signatário: é ela que dá acesso.
+type ChaveDocumento struct {
+	CertificadoID int64
+	ChaveCifrada  []byte
+}
+
+// ConfereIntegridade garante a fidelidade: o PDF decifrado precisa ter
+// exatamente o SHA-256 registrado no momento da assinatura.
+func (d *Documento) ConfereIntegridade(pdf []byte, sha256Hex func([]byte) string) error {
+	if sha256Hex(pdf) != d.SHA256Assinado {
+		return ErrDocumentoCorrompido
+	}
+	return nil
 }

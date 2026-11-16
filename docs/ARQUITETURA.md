@@ -85,6 +85,8 @@ erDiagram
     usuarios ||--o{ sessoes : abre
     usuarios ||--o{ documentos : assina
     certificados ||--o{ documentos : "assinado com"
+    documentos ||--|{ documento_chaves : "uma por signatário"
+    certificados ||--o{ documento_chaves : "dá acesso"
     ac {
         text tipo PK "raiz | intermediaria"
         text cert_pem
@@ -114,7 +116,14 @@ erDiagram
         text sha256_original
         text sha256_assinado
         int pagina
-        bytea pdf_assinado
+        int tamanho
+        bool cifrado
+        bytea pdf_assinado "AES-256-GCM"
+    }
+    documento_chaves {
+        bigint documento_id PK
+        bigint certificado_id PK
+        bytea chave_cifrada "RSA-OAEP da chave AES"
     }
 ```
 

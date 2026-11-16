@@ -16,7 +16,7 @@
 | 🖋️ | **Assinar PDF**: escolher a página e o ponto exato do carimbo e assinar com a sua chave | ✅ |
 | 🔍 | **Validar PDF**: integridade, autenticidade, cadeia e revogação | ❌ |
 | 🏛️ | **Ver a AC ACME**: baixar a AC Raiz, a AC Intermediária e a LCR | ❌ |
-| 📂 | **Histórico** de documentos assinados | ✅ |
+| 📂 | **Documentos** guardados **cifrados**, visíveis para **todos que assinaram** | ✅ |
 | 🚫 | **Revogar** o certificado e ver a LCR mudar | ✅ |
 | 🔄 | **Renovar** (novo par de chaves e novo certificado) | ✅ |
 | 💾 | **Exportar `.pfx`** (A1) para instalar no Windows ([o que é cada arquivo](#meu-certificado)) | ✅ |
@@ -202,6 +202,7 @@ Pronto: abra 👉 **http://localhost:8080**
 
 * ✍️ **Assinatura:** SHA-256 do PDF → assinado com **RSA PKCS#1 v1.5** → envelope **CMS** (PAdES-B-B) gravado dentro do próprio PDF.
 * 🔑 **Chave privada do usuário:** fica no servidor (como no gov.br), **cifrada com a senha dele**: Argon2id deriva a chave e o AES-256-GCM cifra.
+* 📦 **Armazenamento:** cada PDF fica cifrado com **AES-256-GCM**, e a chave dele é cifrada com **RSA-OAEP** para cada signatário. Só quem assinou abre, e o arquivo devolvido é idêntico ao assinado (SHA-256 conferido).
 * 🚫 **Revogação:** LCR (lista de certificados revogados) assinada pela AC Intermediária, com os motivos da RFC 5280.
 
 👉 **A explicação completa, passo a passo, está em [docs/CERTIFICADOS.md](docs/CERTIFICADOS.md).**
@@ -245,10 +246,11 @@ cd backend  && AC_SENHA=lcr-local-dev-ac-2026 go run ./cmd/server   # ⚙️ API
 cd frontend && npm install && npm run dev                    # 🎨 Vite (redireciona /api para a :8080)
 ```
 
-🧪 Testes do backend:
+🧪 Testes do backend e teste de ponta a ponta (com o compose no ar):
 
 ```bash
 cd backend && go test -race ./...
+bash scripts/e2e-documentos.sh
 ```
 
 ---

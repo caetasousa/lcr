@@ -127,9 +127,16 @@ func run() error {
 	assinSvc, err := service.NovoAssinaturas(service.AssinaturaDeps{
 		Usuarios: usuarios, Certificados: certificados, Documentos: documentos,
 		Cofre: argon, AC: ac, Assinador: pades.Assinador{},
+		Validador: validador, Cifrador: cripto.Envelope{},
 	}, opts...)
 	if err != nil {
 		return err
+	}
+	// Documentos gravados em claro por versões antigas passam a ser cifrados.
+	if n, err := assinSvc.MigrarLegados(ctx); err != nil {
+		return fmt.Errorf("migrando documentos para armazenamento cifrado: %w", err)
+	} else if n > 0 {
+		slog.Info("documentos antigos cifrados", "quantidade", n)
 	}
 
 	// ---------- adaptador primário ----------

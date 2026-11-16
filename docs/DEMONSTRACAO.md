@@ -72,6 +72,8 @@ Aqui você mostra que a assinatura **detecta qualquer alteração**.
 
 ✅ **Resultado esperado:** a validação mostra **duas assinaturas**, ambas válidas.
 
+4. Abra **Documentos** com cada uma das contas. A versão com as duas assinaturas aparece **para as duas pessoas**, com os dois nomes em *Assinado por*. Para baixar, o site pede a sua senha: os PDFs ficam guardados **cifrados**, e só quem assinou consegue abrir.
+
 ### 6️⃣ Revogar o certificado 🚫
 
 1. Entre com a primeira conta → menu **Certificado** → **Revogar**.

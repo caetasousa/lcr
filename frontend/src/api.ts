@@ -98,6 +98,7 @@ export interface Documento {
   sha256_original: string
   sha256_assinado: string
   tamanho: number
+  signatarios: string[]
 }
 
 export interface InfoAC {
@@ -162,7 +163,8 @@ export const api = {
   },
 
   documentos: async (): Promise<Documento[]> => (await req('/api/documentos')).json(),
-  documento: async (id: number): Promise<Blob> => (await req(`/api/documentos/${id}`)).blob(),
+  // O PDF fica cifrado no servidor: a senha libera a chave privada que o decifra.
+  documento: async (id: number, senha: string): Promise<Blob> => (await req(`/api/documentos/${id}`, json({ senha }))).blob(),
 
   exportarPfx: async (senha: string): Promise<Blob> => (await req('/api/certificado/pfx', json({ senha }))).blob(),
   revogar: (senha: string, motivo: number) => req('/api/certificado/revogar', json({ senha, motivo })),
