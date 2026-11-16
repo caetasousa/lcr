@@ -27,9 +27,14 @@ type Parametros struct {
 	Memoria  uint32 // KiB
 	Threads  uint8
 	TamChave uint32
+	// Simultaneos limita quantos cálculos Argon2id rodam ao mesmo tempo
+	// (0 = sem limite). Cada um usa Memoria KiB de RAM: com 64 MiB e 60
+	// logins no mesmo instante seriam ~3,8 GiB. Com o limite, o pico fica
+	// em Simultaneos × Memoria e o excedente espera na fila.
+	Simultaneos int
 }
 
-var ParametrosPadrao = Parametros{Tempo: 3, Memoria: 64 * 1024, Threads: 4, TamChave: 32}
+var ParametrosPadrao = Parametros{Tempo: 3, Memoria: 64 * 1024, Threads: 4, TamChave: 32, Simultaneos: 4}
 
 const (
 	tamSalt     = 16
@@ -37,7 +42,10 @@ const (
 )
 
 // Argon2 implementa HasherSenha e Cofre.
-type Argon2 struct{ p Parametros }
+type Argon2 struct {
+	p     Parametros
+	vagas chan struct{} // semáforo; nil = sem limite
+}
 
 var (
 	_ port.HasherSenha = (*Argon2)(nil)
@@ -49,11 +57,27 @@ func NovoArgon2(p Parametros) (*Argon2, error) {
 	if p.Tempo < 1 || p.Memoria < 8*1024 || p.Threads < 1 || p.TamChave < 16 {
 		return nil, errors.New("parâmetros Argon2id fracos demais")
 	}
-	return &Argon2{p: p}, nil
+	a := &Argon2{p: p}
+	if p.Simultaneos < 0 {
+		return nil, errors.New("Simultaneos não pode ser negativo")
+	}
+	if p.Simultaneos > 0 {
+		a.vagas = make(chan struct{}, p.Simultaneos)
+	}
+	return a, nil
+}
+
+// idKey calcula o Argon2id respeitando o limite de cálculos simultâneos.
+func (a *Argon2) idKey(senha, salt []byte, t, m uint32, p uint8, n uint32) []byte {
+	if a.vagas != nil {
+		a.vagas <- struct{}{}
+		defer func() { <-a.vagas }()
+	}
+	return argon2.IDKey(senha, salt, t, m, p, n)
 }
 
 func (a *Argon2) deriva(senha string, salt []byte) []byte {
-	return argon2.IDKey([]byte(senha), salt, a.p.Tempo, a.p.Memoria, a.p.Threads, a.p.TamChave)
+	return a.idKey([]byte(senha), salt, a.p.Tempo, a.p.Memoria, a.p.Threads, a.p.TamChave)
 }
 
 func aleatorio(n int) ([]byte, error) {
@@ -93,7 +117,7 @@ func (a *Argon2) Conferir(senha, phc string) bool {
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	calc := argon2.IDKey([]byte(senha), salt, t, m, p, uint32(len(esperado)))
+	calc := a.idKey([]byte(senha), salt, t, m, p, uint32(len(esperado)))
 	return subtle.ConstantTimeCompare(calc, esperado) == 1
 }
 

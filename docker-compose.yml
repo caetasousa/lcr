@@ -29,6 +29,12 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TZ_ASSINATURA: America/Sao_Paulo
+      # Proteção de memória sob carga: no máximo N cálculos Argon2id (64 MiB
+      # cada) e N requisições com PDF ao mesmo tempo; o resto espera na fila.
+      LIMITE_ARGON2: ${LIMITE_ARGON2:-4}
+      LIMITE_PDF: ${LIMITE_PDF:-4}
+      # Faz o coletor de lixo do Go trabalhar mais antes de passar deste valor.
+      GOMEMLIMIT: ${GOMEMLIMIT:-768MiB}
     ports:
       - "8080:8080"
 

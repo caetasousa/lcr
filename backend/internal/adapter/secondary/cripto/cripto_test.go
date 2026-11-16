@@ -3,6 +3,7 @@ package cripto
 import (
 	"bytes"
 	"errors"
+	"sync"
 	"testing"
 
 	"lcr/internal/domain"
@@ -80,5 +81,32 @@ func TestTokens(t *testing.T) {
 	}
 	if !bytes.Equal(h, Tokens{}.Hash(tok)) {
 		t.Error("hash do token não é determinístico")
+	}
+}
+
+func TestArgon2ComLimiteNaoTravaSobConcorrencia(t *testing.T) {
+	a, err := NovoArgon2(Parametros{Tempo: 1, Memoria: 8 * 1024, Threads: 1, TamChave: 32, Simultaneos: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, _ := a.Gerar("senha-123")
+	var wg sync.WaitGroup
+	erros := make(chan string, 20)
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if !a.Conferir("senha-123", h) {
+				erros <- "falhou"
+			}
+		}()
+	}
+	wg.Wait()
+	close(erros)
+	if len(erros) > 0 {
+		t.Errorf("%d conferências falharam sob concorrência", len(erros))
+	}
+	if _, err := NovoArgon2(Parametros{Tempo: 1, Memoria: 8 * 1024, Threads: 1, TamChave: 32, Simultaneos: -1}); err == nil {
+		t.Error("Simultaneos negativo deveria ser recusado")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 	_ "time/tzdata" // fuso America/Sao_Paulo mesmo em imagens mínimas
@@ -31,6 +32,20 @@ type configuracao struct {
 	estatico     string
 	cookieSeguro bool
 	fuso         *time.Location
+	limiteArgon2 int // cálculos Argon2id simultâneos (64 MiB cada)
+	limitePDF    int // requisições com PDF simultâneas
+}
+
+func inteiroPositivo(k string, padrao int) (int, error) {
+	v := os.Getenv(k)
+	if v == "" {
+		return padrao, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s deve ser um inteiro >= 1, veio %q", k, v)
+	}
+	return n, nil
 }
 
 func env(k, padrao string) string {
@@ -55,6 +70,13 @@ func lerConfiguracao() (configuracao, error) {
 		estatico:     os.Getenv("STATIC_DIR"),
 		cookieSeguro: os.Getenv("COOKIE_SECURE") == "true",
 		fuso:         fuso,
+	}
+	var errL error
+	if c.limiteArgon2, errL = inteiroPositivo("LIMITE_ARGON2", 4); errL != nil {
+		return c, errL
+	}
+	if c.limitePDF, errL = inteiroPositivo("LIMITE_PDF", 4); errL != nil {
+		return c, errL
 	}
 	if len(c.senhaAC) < 12 {
 		return c, errors.New("defina AC_SENHA (mínimo 12 caracteres): ela protege as chaves privadas da AC")
@@ -87,7 +109,9 @@ func run() error {
 	}
 	defer db.Close()
 
-	argon, err := cripto.NovoArgon2(cripto.ParametrosPadrao)
+	parametros := cripto.ParametrosPadrao
+	parametros.Simultaneos = cfg.limiteArgon2
+	argon, err := cripto.NovoArgon2(parametros)
 	if err != nil {
 		return err
 	}
@@ -146,7 +170,8 @@ func run() error {
 		Assinaturas:  assinSvc,
 		Validacao:    service.NovaValidacao(service.ValidacaoDeps{Certificados: certificados, AC: ac, Validador: validador}),
 		AC:           service.NovaAC(certificados, ac),
-	}, httpadapter.ComDiretorioEstatico(cfg.estatico), httpadapter.ComCookieSeguro(cfg.cookieSeguro))
+	}, httpadapter.ComDiretorioEstatico(cfg.estatico), httpadapter.ComCookieSeguro(cfg.cookieSeguro),
+		httpadapter.ComLimiteDePDFs(cfg.limitePDF, 30*time.Second))
 	if err != nil {
 		return err
 	}
