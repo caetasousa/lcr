@@ -206,6 +206,15 @@ func (r *Documentos) DoUsuario(ctx context.Context, usuarioID int64) ([]domain.D
 		 WHERE d.cifrado AND EXISTS (
 		       SELECT 1 FROM documento_chaves k JOIN certificados c ON c.id = k.certificado_id
 		       WHERE k.documento_id = d.id AND c.usuario_id = $1)
+		   -- Cada assinatura grava uma versão nova do PDF. Esconde as versões
+		   -- que já foram assinadas de novo (a nova partiu deste PDF) quando o
+		   -- usuário também tem acesso à nova: assim ele valida/baixa sempre o
+		   -- arquivo com TODAS as assinaturas, não uma cópia antiga com só uma.
+		   AND NOT EXISTS (
+		       SELECT 1 FROM documentos n
+		       JOIN documento_chaves k2 ON k2.documento_id = n.id
+		       JOIN certificados c2 ON c2.id = k2.certificado_id
+		       WHERE n.cifrado AND n.sha256_original = d.sha256_assinado AND c2.usuario_id = $1)
 		 ORDER BY d.id DESC LIMIT 500`, usuarioID)
 	if err != nil {
 		return nil, err

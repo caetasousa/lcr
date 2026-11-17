@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS documentos (
 	pdf_assinado    BYTEA NOT NULL
 );
 CREATE INDEX IF NOT EXISTS documentos_usuario ON documentos(usuario_id);
+CREATE INDEX IF NOT EXISTS documentos_sha256_original ON documentos(sha256_original);
 CREATE INDEX IF NOT EXISTS sessoes_expira ON sessoes(expira_em);
 -- Desde a cifra híbrida, pdf_assinado guarda o PDF cifrado (AES-256-GCM).
 -- cifrado=false marca documentos antigos, ainda em claro, a migrar.

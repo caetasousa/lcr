@@ -120,6 +120,9 @@ export default function Assinar({ eu, onValidar }: Props) {
       {!arquivo ? (
         <div className="painel revelar" style={{ '--i': 1 } as React.CSSProperties}>
           <SeletorArquivo texto="Escolha o PDF que você quer assinar" onArquivo={(f) => { setErro(''); setArquivo(f) }} />
+          <p className="fraco" style={{ fontSize: 13, marginTop: 'var(--e2)' }}>
+            Se outra pessoa já assinou, envie o PDF <b>já assinado</b> por ela, não o original: só assim as duas assinaturas ficam no mesmo arquivo.
+          </p>
           {erro && <p className="erro">{erro}</p>}
         </div>
       ) : (

@@ -125,6 +125,70 @@ func TestAssinarEValidarDeVerdade(t *testing.T) {
 	}
 }
 
+// Dois signatários no mesmo PDF: a validação tem de listar os dois.
+func TestDuasAssinaturas(t *testing.T) {
+	if testing.Short() {
+		t.Skip("gera chaves RSA")
+	}
+	ctx := context.Background()
+	cofre, _ := cripto.NovoArgon2(cripto.Parametros{Tempo: 1, Memoria: 8 * 1024, Threads: 1, TamChave: 32})
+	ac, err := acx509.Carregar(ctx, armazemMem{}, cofre, "senha-da-ac-teste",
+		acx509.ComTamanhosDeChave(2048, 2048, 2048))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cpf1, _ := domain.NovoCPF("529.982.247-25")
+	cpf2, _ := domain.NovoCPF("111.444.777-35")
+	em1, err := ac.Emitir(ctx, "Maria da Conceição", cpf1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	em2, err := ac.Emitir(ctx, "João da Silva", cpf2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdf, _ := domain.NovoPDF(pdfMinimo())
+	pos1, _ := domain.NovaPosicao(2, 40, 40, 300, 110)
+	pos2, _ := domain.NovaPosicao(2, 40, 200, 300, 270)
+
+	assinar := func(pdf []byte, em *domain.Emissao, nome string, cpf domain.CPF, pos domain.Posicao) []byte {
+		t.Helper()
+		out, err := pades.Assinador{}.Assinar(ctx, port.PedidoAssinaturaPDF{
+			PDF: pdf, CertPEM: em.CertPEM, ChavePKCS8: em.ChavePKCS8, CadeiaPEM: ac.CadeiaPEM(),
+			Nome: nome, CPF: cpf, Posicao: pos, Data: time.Now(), URLValidar: "http://localhost/validar",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	um := assinar(pdf, em1, "Maria da Conceição", cpf1, pos1)
+	dois := assinar(um, em2, "João da Silva", cpf2, pos2)
+
+	v, err := pades.NovoValidador(ac.RaizPEM())
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := v.Validar(ctx, dois)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Assinaturas) != 2 {
+		t.Fatalf("esperava 2 assinaturas, veio %d (%s)", len(res.Assinaturas), res.Erro)
+	}
+	seriais := map[string]bool{}
+	for _, a := range res.Assinaturas {
+		if !a.Integra || a.Certificado == nil {
+			t.Errorf("assinatura deveria ser íntegra: %+v", a)
+			continue
+		}
+		seriais[a.Certificado.Serial] = true
+	}
+	if !seriais[em1.Serial] || !seriais[em2.Serial] {
+		t.Errorf("faltou signatário: %v (esperava %s e %s)", seriais, em1.Serial, em2.Serial)
+	}
+}
+
 func TestLCR(t *testing.T) {
 	ctx := context.Background()
 	cofre, _ := cripto.NovoArgon2(cripto.Parametros{Tempo: 1, Memoria: 8 * 1024, Threads: 1, TamChave: 32})
